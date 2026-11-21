@@ -33,7 +33,9 @@ export default function CocinaView() {
     await fetch("/api/dzib/kitchen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear-alert", accountId }) });
     load();
   }
-  const items = data?.items ?? [];
+  // Solo platillos pendientes de preparar/entregar; los ya entregados no
+  // estorban la lista (el mesero y caja ya los ven como entregados).
+  const items = (data?.items ?? []).filter((i: any) => i.status !== "entregado");
   const alerts = data?.alerts ?? [];
   const byTable: Record<string, any[]> = {};
   for (const i of items) { (byTable[i.table] ??= []).push(i); }
