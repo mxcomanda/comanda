@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     const alerts = await getKitchenAlerts();
     return NextResponse.json({ role, kitchen, items, alerts });
   }
-  const items = db.accounts.flatMap((a) => a.items.filter((i) => i.status !== "espera" && i.status !== "cancelado" && (i.kitchen === kitchen || i.kitchen === "ambas")).map((i) => ({ ...i, table: a.tableLabel, accountId: a.id })));
+  const items = db.accounts.filter((a) => a.status === "abierta" || a.status === "cuenta-pedida").flatMap((a) => a.items.filter((i) => i.status !== "espera" && i.status !== "cancelado" && (i.kitchen === kitchen || i.kitchen === "ambas")).map((i) => ({ ...i, table: a.tableLabel, accountId: a.id })));
   const alerts = db.accounts.filter((a) => (a as any).kitchenAlert && a.status !== "cerrada").map((a) => ({ accountId: a.id, tableLabel: a.tableLabel }));
   return NextResponse.json({ role, kitchen, items, alerts });
 }

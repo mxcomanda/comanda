@@ -172,6 +172,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
   const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.account_id, a.table_id
     FROM order_items oi JOIN accounts a ON a.id = oi.account_id
     WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status <> 'espera' AND oi.status <> 'cancelado'
+    AND a.status IN ('abierta', 'cuenta-pedida')
     AND (oi.kitchen = ${kitchen} OR oi.kitchen = 'ambas') ORDER BY oi.created_at ASC`;
   return rows.map((r) => ({
     id: String(r.id), name: r.name as string, priceCents: r.price_cents as number,
