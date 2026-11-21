@@ -25,15 +25,20 @@ export function ensureSeeded(): Promise<void> {
 }
 
 async function seedOnce(): Promise<void> {
-  const { rows } = await sql`SELECT COUNT(*)::int AS n FROM menu_items WHERE restaurant_slug = ${RESTAURANT}`;
-  if (rows[0].n > 0) return;
-  // Desayunos fijos (ids estables del archivo de datos).
+  // Idempotente y a prueba de instancias concurrentes: los desayunos se
+  // insertan con ON CONFLICT DO NOTHING, y el menú del día se reemplaza
+  // completo cada vez (así un cambio de menú en el código se refleja en la
+  // base). Importante: los desayunos usan ids explícitos 24-71, por lo que
+  // hay que avanzar la secuencia SERIAL antes de insertar los platillos
+  // del día, o sus ids chocarían con los desayunos (ese fue el 500 inicial).
   for (const b of DZIB_BREAKFAST) {
     await sql`INSERT INTO menu_items (id, restaurant_slug, name, description, category, price_cents, kitchen, tiempo, is_available)
       VALUES (${b.id}, ${RESTAURANT}, ${b.name}, ${b.description}, ${b.category}, ${b.priceCents}, ${b.kitchen}, NULL, ${b.isAvailable})
       ON CONFLICT (id) DO NOTHING`;
   }
+  await sql`SELECT setval('menu_items_id_seq', (SELECT COALESCE(MAX(id), 1) FROM menu_items), true)`;
   // Menú del día vigente (categoría 'comida', un platillo por tiempo/precio).
+  await sql`DELETE FROM menu_items WHERE restaurant_slug = ${RESTAURANT} AND category = 'comida'`;
   for (const it of DZIB_DAILY_MENU_TODAY.items) {
     await sql`INSERT INTO menu_items (restaurant_slug, name, description, category, price_cents, kitchen, tiempo, is_available)
       VALUES (${RESTAURANT}, ${it.name}, '', 'comida', ${it.soloPriceCents}, ${it.kitchen}, ${it.tiempo}, true)`;
