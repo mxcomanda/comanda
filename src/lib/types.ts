@@ -12,6 +12,9 @@ export interface Account {
   totalCents: number; status: "abierta" | "cuenta-pedida" | "pagada" | "cerrada";
   payment?: { method: "terminal" | "efectivo"; cashCents?: number } | null;
   changeReady?: boolean; kitchenAlert?: boolean;
+  // Fecha (México) del corte final en el que se incluyó esta cuenta.
+  // Null = todavía no cortada; el resumen del día solo cuenta las no cortadas.
+  cutDate?: string | null;
   createdAt: string;
 }
 export const mxn = (cents: number) =>

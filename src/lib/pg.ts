@@ -6,6 +6,7 @@ import { sql, hasPostgres } from "./db";
 import { DZIB_BREAKFAST, DZIB_DAILY_MENU_TODAY, DZIB_SETTINGS, DZIB_TABLES } from "@/data/dzib";
 import type { Account, OrderItem } from "./types";
 import { computeTotal } from "./types";
+import { computeDaySummary, mexicoDateString, type DayCut, type DaySummary, type DayTableSummary, type DayOpenAccount } from "./daySummary";
 
 export { hasPostgres };
 
@@ -189,6 +190,107 @@ export async function getAllAccounts(): Promise<Account[]> {
   const out: Account[] = [];
   for (const a of rows) out.push(rowToAccount(a, await getItems(String(a.id))));
   return out;
+}
+
+// ---------- Resumen del día y corte final (solo Caja) ----------
+// "Día" = fecha actual en America/Mexico_City (se calcula en SQL con
+// AT TIME ZONE, para no depender de la zona horaria del servidor).
+// El resumen solo cuenta cuentas SIN cortar (cut_date IS NULL): al hacer
+// el corte, todas las cuentas del día quedan marcadas con cut_date y el
+// resumen vuelve a ceros sin borrar el historial (el corte queda guardado
+// en daily_cuts).
+let dayCutSchemaPromise: Promise<void> | null = null;
+export function ensureDayCutSchema(): Promise<void> {
+  if (!hasPostgres) return Promise.resolve();
+  if (!dayCutSchemaPromise) {
+    dayCutSchemaPromise = (async () => {
+      await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cut_date DATE`;
+      await sql`CREATE TABLE IF NOT EXISTS daily_cuts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        restaurant_slug TEXT NOT NULL,
+        cut_date DATE NOT NULL,
+        closed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        total_orders INT NOT NULL DEFAULT 0,
+        total_cents INT NOT NULL DEFAULT 0,
+        cash_cents INT NOT NULL DEFAULT 0,
+        card_cents INT NOT NULL DEFAULT 0,
+        per_table JSONB NOT NULL DEFAULT '[]'::jsonb,
+        open_accounts JSONB NOT NULL DEFAULT '[]'::jsonb,
+        UNIQUE (restaurant_slug, cut_date)
+      )`;
+    })().catch((e) => { dayCutSchemaPromise = null; throw e; });
+  }
+  return dayCutSchemaPromise;
+}
+
+function cutRowToCut(r: Record<string, unknown>): DayCut {
+  const perTable = (r.per_table as DayTableSummary[]) ?? [];
+  const openAccounts = (r.open_accounts as DayOpenAccount[]) ?? [];
+  const totalCents = (r.total_cents as number) ?? 0;
+  const cashCents = (r.cash_cents as number) ?? 0;
+  const cardCents = (r.card_cents as number) ?? 0;
+  return {
+    id: String(r.id),
+    date: r.cut_date instanceof Date ? r.cut_date.toISOString().slice(0, 10) : String(r.cut_date),
+    closedAt: r.closed_at instanceof Date ? r.closed_at.toISOString() : String(r.closed_at),
+    perTable, totalOrders: (r.total_orders as number) ?? 0, totalCents, cashCents, cardCents,
+    unclassifiedCents: totalCents - cashCents - cardCents,
+    openAccounts, openAccountsClosed: openAccounts,
+  };
+}
+
+export async function getTodayCut(): Promise<DayCut | null> {
+  await ensureDayCutSchema();
+  const { rows } = await sql`SELECT id, cut_date, closed_at, total_orders, total_cents, cash_cents, card_cents, per_table, open_accounts FROM daily_cuts
+    WHERE restaurant_slug = ${RESTAURANT} AND cut_date = (now() AT TIME ZONE 'America/Mexico_City')::date ORDER BY closed_at DESC LIMIT 1`;
+  if (rows.length === 0) return null;
+  return cutRowToCut(rows[0]);
+}
+
+export async function getDayData(): Promise<{ summary: DaySummary; cut: DayCut | null }> {
+  await ensureDayCutSchema();
+  const date = mexicoDateString();
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
+    WHERE restaurant_slug = ${RESTAURANT}
+    AND (created_at AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date
+    AND cut_date IS NULL ORDER BY created_at ASC`;
+  const accounts: Account[] = [];
+  for (const a of rows) accounts.push(rowToAccount(a, await getItems(String(a.id))));
+  const summary = computeDaySummary(accounts, date);
+  const cut = await getTodayCut();
+  return { summary, cut };
+}
+
+export async function saveDayCut(): Promise<{ cut: DayCut } | { error: string; cut?: DayCut }> {
+  await ensureDayCutSchema();
+  const existing = await getTodayCut();
+  if (existing) return { error: "Ya se hizo el corte de hoy.", cut: existing };
+  const { summary } = await getDayData();
+  const openClosed = summary.openAccounts;
+  // 1) Cerrar las cuentas abiertas del día: quedan registradas en el
+  // corte como pendientes sin cobrar (su dinero NO entra en el total
+  // ganado), para que nada se pierda sin rastro.
+  for (const o of openClosed) {
+    await sql`UPDATE accounts SET status = 'cerrada' WHERE id = ${o.accountId}::uuid`;
+  }
+  // 2) Marcar todas las cuentas del día como cortadas: el resumen del
+  // día vuelve a ceros sin borrar el historial (el corte lo guarda).
+  await sql`UPDATE accounts SET cut_date = (now() AT TIME ZONE 'America/Mexico_City')::date
+    WHERE restaurant_slug = ${RESTAURANT}
+    AND (created_at AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date
+    AND cut_date IS NULL`;
+  // 3) Guardar el corte (UNIQUE por día: si dos personas cortan a la
+  // vez, la segunda recibe el corte ya guardado en vez de duplicarlo).
+  try {
+    const inserted = await sql`INSERT INTO daily_cuts (restaurant_slug, cut_date, total_orders, total_cents, cash_cents, card_cents, per_table, open_accounts)
+      VALUES (${RESTAURANT}, (now() AT TIME ZONE 'America/Mexico_City')::date, ${summary.totalOrders}, ${summary.totalCents}, ${summary.cashCents}, ${summary.cardCents}, ${JSON.stringify(summary.perTable)}::jsonb, ${JSON.stringify(openClosed)}::jsonb)
+      RETURNING id, cut_date, closed_at, total_orders, total_cents, cash_cents, card_cents, per_table, open_accounts`;
+    return { cut: cutRowToCut(inserted.rows[0]) };
+  } catch {
+    const again = await getTodayCut();
+    if (again) return { error: "Ya se hizo el corte de hoy.", cut: again };
+    throw new Error("No se pudo guardar el corte");
+  }
 }
 
 // ---------- Menú desde la base ----------

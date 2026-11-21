@@ -4,6 +4,7 @@
 // Este store es solo el arranque para probar el flujo sin credenciales.
 import { DZIB_BREAKFAST, DZIB_TABLES, DZIB_DAILY_MENU_EXAMPLE, DZIB_SETTINGS } from "@/data/dzib";
 import type { Account, OrderItem } from "./types";
+import type { DayCut } from "./daySummary";
 import { computeTotal } from "./types";
 
 export const db = {
@@ -12,6 +13,9 @@ export const db = {
   tables: [...DZIB_TABLES],
   settings: { ...DZIB_SETTINGS },
   accounts: [] as Account[],
+  // Cortes finales del día guardados (solo desarrollo local; en Vercel
+  // viven en la tabla daily_cuts de Postgres).
+  dayCuts: [] as DayCut[],
   // PINs por rol: NO hay valores por defecto. El encargado los crea en /dzib/personal
   // (primera vez) y solo Caja los cambia. Se guardan como hash SHA-256 con sal.
   // En producción viven en la tabla staff_pins de Postgres, no aquí.

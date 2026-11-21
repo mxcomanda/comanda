@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { verifySession } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
-import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, setChangeReady, setKitchenAlert } from "@/lib/pg";
+import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, setChangeReady, setKitchenAlert, getDayData, saveDayCut } from "@/lib/pg";
+import { computeDaySummary, mexicoDateString, type DayCut } from "@/lib/daySummary";
 
 function roleOf(req: Request) {
   return verifySession(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
@@ -15,7 +16,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Tu rol no tiene acceso a Meseros / cuentas" }, { status: 403 });
   if (hasPostgres) {
     const accounts = await getAllAccounts();
+    if (role === "caja") {
+      const { summary, cut } = await getDayData();
+      return NextResponse.json({ role, accounts, summary, cut });
+    }
     return NextResponse.json({ role, accounts });
+  }
+  if (role === "caja") {
+    const date = mexicoDateString();
+    const summary = computeDaySummary(db.accounts, date);
+    const cut = db.dayCuts.find((c) => c.date === date) ?? null;
+    return NextResponse.json({ role, accounts: db.accounts, summary, cut });
   }
   return NextResponse.json({ role, accounts: db.accounts });
 }
@@ -28,6 +39,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Tu rol no tiene acceso a Meseros / cuentas" }, { status: 403 });
   const body = await req.json().catch(() => null);
   const action = body?.action as string;
+
+  // Corte final del día (solo Caja, sin accountId): revisa el resumen,
+  // cierra las cuentas abiertas del día, marca el día como cortado y
+  // guarda el corte con fecha, hora y totales.
+  if (action === "corte") {
+    if (role !== "caja") return NextResponse.json({ error: "Solo Caja puede hacer el corte" }, { status: 403 });
+    if (hasPostgres) {
+      const res = await saveDayCut();
+      if ("error" in res) return NextResponse.json({ error: res.error, cut: res.cut ?? null }, { status: 400 });
+      return NextResponse.json({ ok: true, cut: res.cut });
+    }
+    const date = mexicoDateString();
+    const existing = db.dayCuts.find((c) => c.date === date);
+    if (existing) return NextResponse.json({ error: "Ya se hizo el corte de hoy.", cut: existing }, { status: 400 });
+    const summary = computeDaySummary(db.accounts, date);
+    const openClosed = summary.openAccounts;
+    for (const o of openClosed) {
+      const a = db.accounts.find((x) => x.id === o.accountId);
+      if (a) a.status = "cerrada";
+    }
+    for (const a of db.accounts) {
+      if (a.createdAt && mexicoDateString(new Date(a.createdAt)) === date && !a.cutDate) a.cutDate = date;
+    }
+    const cut: DayCut = { ...summary, id: `cut-${Date.now()}`, closedAt: new Date().toISOString(), openAccountsClosed: openClosed };
+    db.dayCuts.push(cut);
+    return NextResponse.json({ ok: true, cut });
+  }
+
   const accountId = String(body?.accountId ?? "");
   if (!accountId) return NextResponse.json({ error: "Falta la cuenta" }, { status: 400 });
 

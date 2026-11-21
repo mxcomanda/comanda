@@ -107,11 +107,13 @@ button { cursor: pointer; }
 .dzib .pick .sel-tag { font-size: 12px; font-weight: 900; color: var(--burnt); text-transform: uppercase; }
 /* OJO: .dzib button (más específico) pisa el fondo de .big-btn y dejaba
    el texto blanco sobre fondo casi blanco = botón "en blanco". Por eso
-   estas reglas llevan el prefijo .dzib para ganarle en especificidad. */
-.dzib .big-btn { display: block; width: 100%; min-height: 64px; font-size: 20px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; border: 3px solid var(--dzib-ink); border-radius: 16px; background: var(--burnt); color: #fff; box-shadow: 5px 5px 0 var(--dzib-ink); margin: 14px 0; padding: 14px; }
-.dzib .big-btn:disabled { background: #cbbfa5; color: #5c5344; box-shadow: 5px 5px 0 #8a7f68; cursor: not-allowed; }
-.dzib .big-btn.pay { background: var(--gold); color: var(--dzib-ink); }
-.dzib .big-btn.green { background: #2e7d32; }
+   estas reglas llevan el prefijo .dzib para ganarle en especificidad
+   dentro de /dzib, y la variante sin prefijo para los botones grandes
+   fuera de .dzib (como el corte de Caja). */
+.big-btn, .dzib .big-btn { display: block; width: 100%; min-height: 64px; font-size: 20px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; border: 3px solid var(--dzib-ink); border-radius: 16px; background: var(--burnt); color: #fff; box-shadow: 5px 5px 0 var(--dzib-ink); margin: 14px 0; padding: 14px; }
+.big-btn:disabled, .dzib .big-btn:disabled { background: #cbbfa5; color: #5c5344; box-shadow: 5px 5px 0 #8a7f68; cursor: not-allowed; }
+.big-btn.pay, .dzib .big-btn.pay { background: var(--gold); color: var(--dzib-ink); }
+.big-btn.green, .dzib .big-btn.green { background: #2e7d32; }
 .alert { border: 3px solid var(--dzib-ink); border-radius: 14px; padding: 14px; margin: 12px 0; font-weight: 700; }
 .alert.red { background: #ffe3e3; border-color: var(--red); }
 .alert.gold { background: #fdf3c9; border-color: var(--gold); }

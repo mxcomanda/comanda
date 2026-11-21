@@ -1,15 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
-import { STATUS_LABEL } from "@/lib/types";
+import { STATUS_LABEL, mxn } from "@/lib/types";
+import { mexicoTimeString } from "@/lib/daySummary";
 import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Caja: todas las cuentas con su total, método de pago, efectivo y cambio,
 // y botones para confirmar el pago, marcar el cambio listo (avisa al
-// mesero) y cerrar la cuenta. Se actualiza cada 5 s.
+// mesero) y cerrar la cuenta. Se actualiza cada 5 s. Además: resumen del
+// día por mesa y corte final del día (solo rol Caja).
 export default function CajaView() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const [showCutReview, setShowCutReview] = useState(false);
+  const [cutBusy, setCutBusy] = useState(false);
   const staffAlerts = useStaffAlerts();
   function load() {
     fetch("/api/dzib/accounts").then(async (r) => {
@@ -25,6 +29,20 @@ export default function CajaView() {
     load();
   }
   const accounts = data?.accounts ?? [];
+  const summary = data?.summary;
+  const cut = data?.cut;
+  const isCaja = data?.role === "caja";
+  async function hacerCorte() {
+    if (!window.confirm("¿Seguro que quieres hacer el corte final del día?")) return;
+    setCutBusy(true);
+    const res = await fetch("/api/dzib/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "corte" }) });
+    const d = await res.json().catch(() => null);
+    setCutBusy(false);
+    if (!res.ok) { setMsg(d?.error ?? "No se pudo hacer el corte"); return; }
+    setMsg("Corte final del día guardado.");
+    setShowCutReview(false);
+    load();
+  }
   // Alertas: vibración + bip + banner cuando una mesa pide la cuenta.
   useEffect(() => {
     if (!data) return;
@@ -47,6 +65,24 @@ export default function CajaView() {
       <StaffAlertUI alerts={staffAlerts} />
       <p><button onClick={load}>Actualizar</button> <a href="/dzib/cocina">Ver cocina</a> · <a href="/dzib/meseros">Ver meseros</a></p>
       {msg && <p>{msg}</p>}
+      {isCaja && summary && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <b>Resumen del día — {summary.date}</b>
+          {cut && <p className="muted">Corte hecho a las {mexicoTimeString(cut.closedAt)} (hora de México). El conteo empezó de nuevo en ceros; el detalle del corte está abajo.</p>}
+          <div className="item"><span>Total de pedidos hoy</span><b>{summary.totalOrders}</b></div>
+          <div className="item"><span>Total ganado hoy</span><b>{mxn(summary.totalCents)}</b></div>
+          <div className="item"><span>Efectivo</span><span>{mxn(summary.cashCents)}</span></div>
+          <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(summary.cardCents)}</span></div>
+          {summary.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(summary.unclassifiedCents)}</span></div>}
+          <h3>Por mesa</h3>
+          {summary.perTable.map((t: any) => (
+            <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
+          ))}
+          {summary.openAccounts.length > 0 && (
+            <p className="danger">Cuentas abiertas hoy (sin cerrar): {summary.openAccounts.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")} — no cuentan en el total ganado hasta que se paguen.</p>
+          )}
+        </div>
+      )}
       {err ? <p className="danger">{err}</p> : accounts.length === 0 ? <p className="muted">No hay cuentas.</p> : accounts.map((a: any) => {
         const change = a.payment?.method === "efectivo" ? (a.payment.cashCents ?? 0) - a.totalCents : 0;
         return (
@@ -77,6 +113,51 @@ export default function CajaView() {
         );
       })}
       <p><a href="/dzib">Volver al menú</a> · <a href="/dzib/personal">Personal</a></p>
+
+      {isCaja && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <b>Corte final del día</b>
+          {cut ? (
+            <>
+              <p>✓ Corte del {cut.date} hecho a las {mexicoTimeString(cut.closedAt)} (hora de México).</p>
+              <div className="item"><span>Total de pedidos</span><b>{cut.totalOrders}</b></div>
+              <div className="item"><span>Total ganado</span><b>{mxn(cut.totalCents)}</b></div>
+              <div className="item"><span>Efectivo</span><span>{mxn(cut.cashCents)}</span></div>
+              <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(cut.cardCents)}</span></div>
+              {cut.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(cut.unclassifiedCents)}</span></div>}
+              <h3>Por mesa</h3>
+              {cut.perTable.map((t: any) => (
+                <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
+              ))}
+              {cut.openAccountsClosed?.length > 0 && (
+                <p className="danger">Cuentas que estaban abiertas y se cerraron en el corte sin cobrar: {cut.openAccountsClosed.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")}. Su dinero no está en el total ganado.</p>
+              )}
+              <p className="muted">El resumen del día ya empezó de nuevo en ceros. El historial de este corte queda guardado.</p>
+            </>
+          ) : (
+            <>
+              <p className="muted">Revisa el resumen del día y haz el corte cuando cierres. Las cuentas abiertas se cerrarán en el corte y quedarán registradas como pendientes sin cobrar.</p>
+              {!showCutReview ? (
+                <button type="button" className="big-btn" onClick={() => setShowCutReview(true)}>Corte final del día</button>
+              ) : (
+                <>
+                  <p><b>Revisa antes de confirmar:</b> {summary ? `${summary.totalOrders} pedidos · ${mxn(summary.totalCents)} ganados · Efectivo ${mxn(summary.cashCents)} · Tarjeta ${mxn(summary.cardCents)}` : "sin datos"}</p>
+                  {summary?.perTable?.map((t: any) => (
+                    <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
+                  ))}
+                  {summary?.openAccounts?.length > 0 && (
+                    <p className="danger">Estas cuentas están abiertas y se cerrarán en el corte sin cobrar: {summary.openAccounts.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")}. Su dinero no está en el total ganado.</p>
+                  )}
+                  <p>
+                    <button type="button" className="big-btn green" disabled={cutBusy} onClick={hacerCorte}>{cutBusy ? "Haciendo corte…" : "Confirmar corte final del día"}</button>{" "}
+                    <button type="button" onClick={() => setShowCutReview(false)}>Cancelar</button>
+                  </p>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </main>
   );
 }

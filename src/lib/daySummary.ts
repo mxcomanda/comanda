@@ -1,0 +1,55 @@
+// Resumen del día y corte final para Caja.
+// "Día" = fecha actual en America/Mexico_City. El total ganado de una mesa
+// es la suma de los totales de sus cuentas cerradas/pagadas del día SIN
+// cortar todavía (el total se calcula desde sus order_items con
+// computeTotal, porque accounts no guarda un total propio). Efectivo vs
+// tarjeta sale de payment_method de cada cuenta; las cuentas cerradas sin
+// método quedan como "sin método registrado". Las cuentas abiertas del día
+// NO cuentan en el total ganado hasta que se paguen.
+import { DZIB_TABLES } from "@/data/dzib";
+import type { Account } from "./types";
+
+export interface DayTableSummary { tableId: number; tableLabel: string; orders: number; totalCents: number; }
+export interface DayOpenAccount { accountId: string; tableLabel: string; status: string; totalCents: number; }
+export interface DaySummary {
+  date: string;
+  perTable: DayTableSummary[]; // siempre las 12 mesas, aunque estén en 0
+  totalOrders: number;
+  totalCents: number;
+  cashCents: number;
+  cardCents: number;
+  unclassifiedCents: number;
+  openAccounts: DayOpenAccount[];
+}
+export interface DayCut extends DaySummary {
+  id: string;
+  closedAt: string; // ISO
+  // Cuentas que estaban abiertas y se cerraron en el corte sin cobrar.
+  openAccountsClosed: DayOpenAccount[];
+}
+
+const MX_TZ = "America/Mexico_City";
+export function mexicoDateString(d: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: MX_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+export function mexicoTimeString(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("es-MX", { timeZone: MX_TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+  } catch { return iso; }
+}
+
+export function computeDaySummary(accounts: Account[], date: string): DaySummary {
+  const todays = accounts.filter((a) => a.createdAt && mexicoDateString(new Date(a.createdAt)) === date && !a.cutDate);
+  const done = todays.filter((a) => a.status === "pagada" || a.status === "cerrada");
+  const perTable: DayTableSummary[] = DZIB_TABLES.map((t) => {
+    const mine = done.filter((a) => a.tableId === t.id);
+    return { tableId: t.id, tableLabel: t.label, orders: mine.length, totalCents: mine.reduce((s, a) => s + a.totalCents, 0) };
+  });
+  const totalCents = done.reduce((s, a) => s + a.totalCents, 0);
+  const cashCents = done.filter((a) => a.payment?.method === "efectivo").reduce((s, a) => s + a.totalCents, 0);
+  const cardCents = done.filter((a) => a.payment?.method === "terminal").reduce((s, a) => s + a.totalCents, 0);
+  const openAccounts: DayOpenAccount[] = todays
+    .filter((a) => a.status === "abierta" || a.status === "cuenta-pedida")
+    .map((a) => ({ accountId: a.id, tableLabel: a.tableLabel, status: a.status, totalCents: a.totalCents }));
+  return { date, perTable, totalOrders: done.length, totalCents, cashCents, cardCents, unclassifiedCents: totalCents - cashCents - cardCents, openAccounts };
+}
