@@ -1,11 +1,56 @@
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
 import { DZIB_TABLES } from "@/data/dzib";
-import { hasPostgres, getOrCreateAccount, addOrderItems } from "@/lib/pg";
+import { hasPostgres, getOrCreateAccount, getAccountWithItems, addOrderItems, setAccountPayment } from "@/lib/pg";
 import type { Account } from "@/lib/types";
+
+// Estado de una cuenta (lo usa el comensal para su panel de Status y el
+// mesero). El id es un UUID, no lleva sesión de personal.
+export async function GET(req: Request) {
+  const accountId = new URL(req.url).searchParams.get("accountId") ?? "";
+  if (!accountId) return NextResponse.json({ error: "Falta la cuenta" }, { status: 400 });
+  if (hasPostgres) {
+    const account = await getAccountWithItems(accountId);
+    if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    return NextResponse.json({ ok: true, account });
+  }
+  const account = db.accounts.find((a) => a.id === accountId);
+  if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+  return NextResponse.json({ ok: true, account });
+}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
+
+  // Pagar: lo pide el comensal desde su mesa. Tarjeta (terminal) o
+  // efectivo (con el billete/cantidad, para calcular el cambio en caja).
+  if (body?.action === "pay") {
+    const accountId = String(body.accountId ?? "");
+    const method = body.method as "terminal" | "efectivo";
+    if (!accountId || (method !== "terminal" && method !== "efectivo"))
+      return NextResponse.json({ error: "Falta la cuenta o el método de pago" }, { status: 400 });
+    const cashCents = method === "efectivo" ? Number(body.cashCents) || 0 : undefined;
+    if (hasPostgres) {
+      const account = await getAccountWithItems(accountId);
+      if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+      if (method === "efectivo" && (cashCents ?? 0) < account.totalCents)
+        return NextResponse.json({ error: `El efectivo no cubre el total de ${account.totalCents / 100}` }, { status: 400 });
+      const paid = await setAccountPayment(accountId, method, cashCents);
+      const change = method === "efectivo" ? (cashCents ?? 0) - (paid?.totalCents ?? 0) : 0;
+      return NextResponse.json({ ok: true, account: paid, changeCents: change });
+    }
+    const account = db.accounts.find((a) => a.id === accountId);
+    if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    if (method === "efectivo" && (cashCents ?? 0) < account.totalCents)
+      return NextResponse.json({ error: "El efectivo no cubre el total" }, { status: 400 });
+    account.status = "cuenta-pedida";
+    account.payment = { method, cashCents };
+    const change = method === "efectivo" ? (cashCents ?? 0) - account.totalCents : 0;
+    return NextResponse.json({ ok: true, account, changeCents: change });
+  }
+
   if (!body?.tableId || !Array.isArray(body.items) || body.items.length === 0)
     return NextResponse.json({ error: "Falta mesa o platillos" }, { status: 400 });
   const table = DZIB_TABLES.find((t) => t.id === body.tableId);

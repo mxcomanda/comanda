@@ -5,6 +5,7 @@
 import { sql, hasPostgres } from "./db";
 import { DZIB_BREAKFAST, DZIB_DAILY_MENU_TODAY, DZIB_SETTINGS, DZIB_TABLES } from "@/data/dzib";
 import type { Account, OrderItem } from "./types";
+import { computeTotal } from "./types";
 
 export { hasPostgres };
 
@@ -25,6 +26,10 @@ export function ensureSeeded(): Promise<void> {
 }
 
 async function seedOnce(): Promise<void> {
+  // Columnas para el flujo de cobro y avisos entre personal (si la base
+  // se creó con el esquema original, que no las tiene).
+  await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS change_ready BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS kitchen_alert BOOLEAN DEFAULT false`;
   // Idempotente y a prueba de instancias concurrentes: los desayunos se
   // insertan con ON CONFLICT DO NOTHING, y el menú del día se reemplaza
   // completo cada vez (así un cambio de menú en el código se refleja en la
@@ -69,7 +74,7 @@ function tableLabel(tableId: number): string {
 }
 
 export async function getAccountWithItems(accountId: string): Promise<Account | null> {
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, created_at FROM accounts WHERE id = ${accountId}::uuid`;
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts WHERE id = ${accountId}::uuid`;
   if (rows.length === 0) return null;
   const a = rows[0];
   const items = await getItems(String(a.id));
@@ -86,17 +91,17 @@ async function getItems(accountId: string): Promise<OrderItem[]> {
 }
 
 function rowToAccount(a: Record<string, unknown>, items: OrderItem[]): Account {
-  const total = items.filter((i) => i.status !== "cancelado").reduce((s, i) => s + i.priceCents * i.qty, 0);
   return {
     id: String(a.id), tableId: a.table_id as number, tableLabel: tableLabel(a.table_id as number),
-    items, totalCents: total, status: (a.status as Account["status"]) ?? "abierta",
+    items, totalCents: computeTotal(items), status: (a.status as Account["status"]) ?? "abierta",
     payment: a.payment_method ? { method: a.payment_method as "terminal" | "efectivo", cashCents: (a.cash_cents as number) ?? undefined } : null,
+    changeReady: Boolean(a.change_ready), kitchenAlert: Boolean(a.kitchen_alert),
     createdAt: a.created_at instanceof Date ? a.created_at.toISOString() : String(a.created_at ?? ""),
   };
 }
 
 export async function getOrCreateAccount(tableId: number): Promise<Account> {
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length > 0) {
     const items = await getItems(String(rows[0].id));
@@ -150,7 +155,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
 }
 
 export async function getAllAccounts(): Promise<Account[]> {
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} ORDER BY created_at DESC LIMIT 50`;
   const out: Account[] = [];
   for (const a of rows) out.push(rowToAccount(a, await getItems(String(a.id))));
@@ -186,4 +191,51 @@ export async function getMenuFromDb() {
     tables: DZIB_TABLES,
     settings: DZIB_SETTINGS,
   };
+}
+
+// ---------- Estados, cobro y avisos (cadena cocina → mesero → caja) ----------
+const NEXT_STATUS: Record<string, string> = {
+  pendiente: "preparando",
+  preparando: "listo",
+  listo: "entregado",
+};
+
+export async function advanceItemStatus(itemId: string): Promise<{ status: string } | { error: string }> {
+  const { rows } = await sql`SELECT id, status FROM order_items WHERE id = ${itemId}::uuid`;
+  if (rows.length === 0) return { error: "Platillo no encontrado" };
+  const current = String(rows[0].status);
+  const next = NEXT_STATUS[current];
+  if (!next) return { error: `El platillo ya está ${current}, no avanza más` };
+  await sql`UPDATE order_items SET status = ${next} WHERE id = ${itemId}::uuid`;
+  return { status: next };
+}
+
+export async function setItemStatus(itemId: string, status: string): Promise<boolean> {
+  const { rowCount } = await sql`UPDATE order_items SET status = ${status} WHERE id = ${itemId}::uuid`;
+  return (rowCount ?? 0) > 0;
+}
+
+export async function setAccountPayment(accountId: string, method: "terminal" | "efectivo", cashCents?: number): Promise<Account | null> {
+  await sql`UPDATE accounts SET status = 'cuenta-pedida', payment_method = ${method}, cash_cents = ${cashCents ?? null} WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+export async function setAccountStatus(accountId: string, status: string): Promise<Account | null> {
+  await sql`UPDATE accounts SET status = ${status} WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+export async function setChangeReady(accountId: string, ready: boolean): Promise<Account | null> {
+  await sql`UPDATE accounts SET change_ready = ${ready} WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+export async function setKitchenAlert(accountId: string, alert: boolean): Promise<Account | null> {
+  await sql`UPDATE accounts SET kitchen_alert = ${alert} WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+export async function getKitchenAlerts(): Promise<{ accountId: string; tableLabel: string }[]> {
+  const { rows } = await sql`SELECT id, table_id FROM accounts WHERE restaurant_slug = ${RESTAURANT} AND kitchen_alert = true AND status <> 'cerrada' ORDER BY created_at ASC`;
+  return rows.map((r) => ({ accountId: String(r.id), tableLabel: tableLabel(r.table_id as number) }));
 }

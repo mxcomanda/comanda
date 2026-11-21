@@ -4,6 +4,7 @@
 // Este store es solo el arranque para probar el flujo sin credenciales.
 import { DZIB_BREAKFAST, DZIB_TABLES, DZIB_DAILY_MENU_EXAMPLE, DZIB_SETTINGS } from "@/data/dzib";
 import type { Account, OrderItem } from "./types";
+import { computeTotal } from "./types";
 
 export const db = {
   breakfast: [...DZIB_BREAKFAST],
@@ -18,6 +19,8 @@ export const db = {
   nextOrderId: 1,
 };
 export function newItemId() { return `it-${Date.now()}-${db.nextOrderId++}`; }
+// Total con la regla de la comida corrida: 3 tiempos = sencillo $91,
+// menos tiempos = suma de cada uno. Ver computeTotal en lib/types.ts.
 export function accountTotal(items: OrderItem[]) {
-  return items.filter((i) => i.status !== "cancelado").reduce((s, i) => s + i.priceCents * i.qty, 0);
+  return computeTotal(items);
 }
