@@ -16,6 +16,10 @@ export interface Account {
   totalCents: number; status: "abierta" | "cuenta-pedida" | "pagada" | "cerrada";
   payment?: { method: "terminal" | "efectivo"; cashCents?: number } | null;
   changeReady?: boolean; kitchenAlert?: boolean;
+  // La cerró el mesero (botón "Liberar mesa"): la mesa queda libre para
+  // nuevos comensales y caja recibe el aviso. True solo cuando el cierre
+  // lo hizo el rol Meseros; Caja cierra sin este flag.
+  closedByMesero?: boolean;
   // Fecha (México) del corte final en el que se incluyó esta cuenta.
   // Null = todavía no cortada; el resumen del día solo cuenta las no cortadas.
   cutDate?: string | null;

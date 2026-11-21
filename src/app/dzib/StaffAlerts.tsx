@@ -4,7 +4,10 @@
 //  1) vibra el dispositivo (navigator.vibrate; solo Android/Chrome),
 //  2) suena un bip con Web Audio (sin archivos externos),
 //  3) muestra un banner parpadeante que no se quita hasta pulsar
-//     "Entendido".
+//     "Entendido" — o hasta que el evento se resuelva solo: cuando el
+//     personal atiende lo que pedía la alerta (cocina empieza a preparar,
+//     el mesero entrega el platillo), la pantalla la retira sola con
+//     retract() y ya no vuelve a sonar por ese evento.
 // El sonido y la vibración exigen un gesto previo del usuario en muchos
 // navegadores: por eso cada pantalla tiene un botón "Activar alertas"
 // que desbloquea el audio con un toque y guarda la preferencia en
@@ -57,6 +60,7 @@ export type StaffEvent = { key: string; text: string };
 export function useStaffAlerts() {
   const [enabled, setEnabled] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  const bannerKeyRef = useRef<string | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const firstRef = useRef(true);
   const enabledRef = useRef(false);
@@ -90,12 +94,28 @@ export function useStaffAlerts() {
     seenRef.current = current;
     if (firstRef.current) { firstRef.current = false; return; }
     if (fresh.length > 0) {
-      setBanner(fresh[fresh.length - 1].text);
+      const last = fresh[fresh.length - 1];
+      bannerKeyRef.current = last.key;
+      setBanner(last.text);
       if (enabledRef.current) { beep(); vibrate(); }
     }
   }, []);
 
-  return { enabled, enable, banner, setBanner, notify };
+  // Retirar alertas que ya se resolvieron (el platillo se empezó a
+  // preparar, se entregó, o la cuenta se cerró): quita el banner si es
+  // de uno de esos eventos y olvida sus claves, para que no vuelvan a
+  // sonar por lo mismo. Si el evento vuelve a aparecer después (por
+  // ejemplo, el platillo vuelve a quedar listo), suena de nuevo.
+  const retract = useCallback((keys: string[]) => {
+    if (keys.length === 0) return;
+    for (const k of keys) seenRef.current.delete(k);
+    if (bannerKeyRef.current && keys.includes(bannerKeyRef.current)) {
+      bannerKeyRef.current = null;
+      setBanner(null);
+    }
+  }, []);
+
+  return { enabled, enable, banner, setBanner, notify, retract };
 }
 
 export function StaffAlertUI({ alerts }: { alerts: ReturnType<typeof useStaffAlerts> }) {

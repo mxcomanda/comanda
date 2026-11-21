@@ -43,7 +43,8 @@ export default function CajaView() {
     setShowCutReview(false);
     load();
   }
-  // Alertas: vibración + bip + banner cuando una mesa pide la cuenta.
+  // Alertas: vibración + bip + banner cuando una mesa pide la cuenta, o
+  // cuando el mesero cierra una mesa (queda libre para nuevos comensales).
   useEffect(() => {
     if (!data) return;
     const events: StaffEvent[] = accounts
@@ -55,7 +56,10 @@ export default function CajaView() {
           : "Tarjeta (terminal)";
         return { key: `cuenta:${a.id}`, text: `¡${a.tableLabel} pidió la cuenta! Total $${(a.totalCents / 100).toFixed(0)} · ${method}` };
       });
-    staffAlerts.notify(events);
+    const freed: StaffEvent[] = accounts
+      .filter((a: any) => a.closedByMesero && a.status === "cerrada")
+      .map((a: any) => ({ key: `mesa-cerrada:${a.id}`, text: `¡${a.tableLabel} cerrada por el mesero — lista para nuevos comensales!` }));
+    staffAlerts.notify([...events, ...freed]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
   return (
@@ -65,24 +69,6 @@ export default function CajaView() {
       <StaffAlertUI alerts={staffAlerts} />
       <p><button onClick={load}>Actualizar</button> <a href="/dzib/cocina">Ver cocina</a> · <a href="/dzib/meseros">Ver meseros</a></p>
       {msg && <p>{msg}</p>}
-      {isCaja && summary && (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <b>Resumen del día — {summary.date}</b>
-          {cut && <p className="muted">Corte hecho a las {mexicoTimeString(cut.closedAt)} (hora de México). El conteo empezó de nuevo en ceros; el detalle del corte está abajo.</p>}
-          <div className="item"><span>Total de pedidos hoy</span><b>{summary.totalOrders}</b></div>
-          <div className="item"><span>Total ganado hoy</span><b>{mxn(summary.totalCents)}</b></div>
-          <div className="item"><span>Efectivo</span><span>{mxn(summary.cashCents)}</span></div>
-          <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(summary.cardCents)}</span></div>
-          {summary.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(summary.unclassifiedCents)}</span></div>}
-          <h3>Por mesa</h3>
-          {summary.perTable.map((t: any) => (
-            <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
-          ))}
-          {summary.openAccounts.length > 0 && (
-            <p className="danger">Cuentas abiertas hoy (sin cerrar): {summary.openAccounts.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")} — no cuentan en el total ganado hasta que se paguen.</p>
-          )}
-        </div>
-      )}
       {err ? <p className="danger">{err}</p> : accounts.length === 0 ? <p className="muted">No hay cuentas.</p> : accounts.map((a: any) => {
         const change = a.payment?.method === "efectivo" ? (a.payment.cashCents ?? 0) - a.totalCents : 0;
         return (
@@ -95,6 +81,7 @@ export default function CajaView() {
                   : "Tarjeta (terminal)"}
               </div>
             ) : <div className="muted">Sin pagar todavía.</div>}
+            {a.closedByMesero && <div className="muted">🔓 Liberada por el mesero — lista para nuevos comensales.</div>}
             {a.items?.map((i: any) => (
               <div className="item" key={i.id}><span>{i.name}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
             ))}
@@ -113,6 +100,30 @@ export default function CajaView() {
         );
       })}
       <p><a href="/dzib">Volver al menú</a> · <a href="/dzib/personal">Personal</a></p>
+
+      {/* Resumen general del día: va hasta abajo, justo antes del corte
+          final. Arriba quedan primero las cuentas abiertas y lo operativo. */}
+      {isCaja && summary && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <b>Resumen del día — {summary.date}</b>
+          {cut && <p className="muted">Corte hecho a las {mexicoTimeString(cut.closedAt)} (hora de México). El conteo empezó de nuevo en ceros; el detalle del corte está abajo.</p>}
+          <div className="item"><span>Total de pedidos hoy</span><b>{summary.totalOrders}</b></div>
+          <div className="item"><span>Total ganado hoy</span><b>{mxn(summary.totalCents)}</b></div>
+          <div className="item"><span>Efectivo</span><span>{mxn(summary.cashCents)}</span></div>
+          <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(summary.cardCents)}</span></div>
+          {summary.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(summary.unclassifiedCents)}</span></div>}
+          <h3>Por mesa</h3>
+          {summary.perTable.map((t: any) => (
+            <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
+          ))}
+          {summary.openAccounts.length > 0 && (
+            <p className="danger">Cuentas abiertas hoy (sin cerrar): {summary.openAccounts.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")} — no cuentan en el total ganado hasta que se paguen.</p>
+          )}
+          {summary.closedUnpaid?.length > 0 && (
+            <p className="danger">Cerradas sin cobrar (no están en el total ganado): {summary.closedUnpaid.map((o: any) => `${o.tableLabel} (${mxn(o.totalCents)})`).join(", ")}</p>
+          )}
+        </div>
+      )}
 
       {isCaja && (
         <div className="card" style={{ marginTop: 16 }}>

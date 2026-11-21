@@ -29,6 +29,9 @@ export default function CocinaView() {
     const d = await res.json().catch(() => null);
     if (!res.ok) { setMsg(d?.error ?? "No se pudo avanzar el platillo"); return; }
     setMsg(`Platillo actualizado: ${STATUS_LABEL[d.status as keyof typeof STATUS_LABEL] ?? d.status}`);
+    // Al empezar a preparar, la notificación de "nueva orden" de ese
+    // platillo se quita sola: ya la atendieron.
+    if (d.status === "preparando") staffAlerts.retract([`nuevo:${itemId}`]);
     load();
   }
   async function clearAlert(accountId: string) {
@@ -40,11 +43,15 @@ export default function CocinaView() {
   const items = (data?.items ?? []).filter((i: any) => i.status !== "entregado");
   const alerts = data?.alerts ?? [];
   // Alertas: vibración + bip + banner cuando llega una orden nueva o un
-  // mesero llama a cocina.
+  // mesero llama a cocina. Solo los platillos que todavía no se empezaron
+  // a preparar ("pendiente") son órdenes nuevas: en cuanto cocina marca
+  // "Empezar a preparar", el aviso se retira solo.
   useEffect(() => {
     if (!data) return;
+    const started = items.filter((i: any) => i.status !== "pendiente").map((i: any) => `nuevo:${i.id}`);
+    staffAlerts.retract(started);
     const events: StaffEvent[] = [
-      ...items.map((i: any) => ({ key: `nuevo:${i.id}`, text: `¡Nueva orden! ${i.name} (${i.table})` })),
+      ...items.filter((i: any) => i.status === "pendiente").map((i: any) => ({ key: `nuevo:${i.id}`, text: `¡Nueva orden! ${i.name} (${i.table})` })),
       ...alerts.map((a: any) => ({ key: `llamada:${a.accountId}`, text: `¡${a.tableLabel} llamó a cocina!` })),
     ];
     staffAlerts.notify(events);

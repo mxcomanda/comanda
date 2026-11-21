@@ -1,11 +1,13 @@
 // Resumen del día y corte final para Caja.
 // "Día" = fecha actual en America/Mexico_City. El total ganado de una mesa
-// es la suma de los totales de sus cuentas cerradas/pagadas del día SIN
-// cortar todavía (el total se calcula desde sus order_items con
-// computeTotal, porque accounts no guarda un total propio). Efectivo vs
-// tarjeta sale de payment_method de cada cuenta; las cuentas cerradas sin
-// método quedan como "sin método registrado". Las cuentas abiertas del día
-// NO cuentan en el total ganado hasta que se paguen.
+// es la suma de los totales de sus cuentas pagadas del día SIN cortar
+// todavía (el total se calcula desde sus order_items con computeTotal,
+// porque accounts no guarda un total propio). Una cuenta "cerrada" solo
+// cuenta como ganada si tiene método de pago: si el mesero o caja la
+// cerró sin cobrar, NO entra en el total ganado y aparece aparte en
+// "closedUnpaid" para que caja la vea. Efectivo vs tarjeta sale de
+// payment_method de cada cuenta. Las cuentas abiertas del día NO cuentan
+// en el total ganado hasta que se paguen.
 import { DZIB_TABLES } from "@/data/dzib";
 import type { Account } from "./types";
 
@@ -20,6 +22,9 @@ export interface DaySummary {
   cardCents: number;
   unclassifiedCents: number;
   openAccounts: DayOpenAccount[];
+  // Cuentas cerradas sin cobrar (el mesero liberó la mesa o caja la
+  // cerró antes del pago): su dinero NO está en el total ganado.
+  closedUnpaid: DayOpenAccount[];
 }
 export interface DayCut extends DaySummary {
   id: string;
@@ -40,7 +45,12 @@ export function mexicoTimeString(iso: string): string {
 
 export function computeDaySummary(accounts: Account[], date: string): DaySummary {
   const todays = accounts.filter((a) => a.createdAt && mexicoDateString(new Date(a.createdAt)) === date && !a.cutDate);
-  const done = todays.filter((a) => a.status === "pagada" || a.status === "cerrada");
+  // Ganado = pagadas, o cerradas CON método de pago (pagadas y luego
+  // cerradas). Una cerrada sin método no es dinero ganado.
+  const done = todays.filter((a) => a.status === "pagada" || (a.status === "cerrada" && Boolean(a.payment?.method)));
+  const closedUnpaid: DayOpenAccount[] = todays
+    .filter((a) => a.status === "cerrada" && !a.payment?.method)
+    .map((a) => ({ accountId: a.id, tableLabel: a.tableLabel, status: a.status, totalCents: a.totalCents }));
   const perTable: DayTableSummary[] = DZIB_TABLES.map((t) => {
     const mine = done.filter((a) => a.tableId === t.id);
     return { tableId: t.id, tableLabel: t.label, orders: mine.length, totalCents: mine.reduce((s, a) => s + a.totalCents, 0) };
@@ -51,5 +61,5 @@ export function computeDaySummary(accounts: Account[], date: string): DaySummary
   const openAccounts: DayOpenAccount[] = todays
     .filter((a) => a.status === "abierta" || a.status === "cuenta-pedida")
     .map((a) => ({ accountId: a.id, tableLabel: a.tableLabel, status: a.status, totalCents: a.totalCents }));
-  return { date, perTable, totalOrders: done.length, totalCents, cashCents, cardCents, unclassifiedCents: totalCents - cashCents - cardCents, openAccounts };
+  return { date, perTable, totalOrders: done.length, totalCents, cashCents, cardCents, unclassifiedCents: totalCents - cashCents - cardCents, openAccounts, closedUnpaid };
 }

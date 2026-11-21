@@ -72,6 +72,8 @@ export function ensureColumns(): Promise<void> {
     columnsPromise = (async () => {
       await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS change_ready BOOLEAN DEFAULT false`;
       await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS kitchen_alert BOOLEAN DEFAULT false`;
+      // El mesero cerró la mesa ("Liberar mesa"): caja recibe el aviso.
+      await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS closed_by_mesero BOOLEAN DEFAULT false`;
       // Grupo de comida corrida al que pertenece cada platillo (1, 2…).
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS corrida INT`;
     })().catch((e) => { columnsPromise = null; throw e; });
@@ -102,7 +104,7 @@ function tableLabel(tableId: number): string {
 export async function getAccountWithItems(accountId: string): Promise<Account | null> {
   await ensureColumns();
   if (!isUuid(accountId)) return null;
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts WHERE id = ${accountId}::uuid`;
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts WHERE id = ${accountId}::uuid`;
   if (rows.length === 0) return null;
   const a = rows[0];
   const items = await getItems(String(a.id));
@@ -126,13 +128,14 @@ function rowToAccount(a: Record<string, unknown>, items: OrderItem[]): Account {
     items, totalCents: computeTotal(items), status: (a.status as Account["status"]) ?? "abierta",
     payment: a.payment_method ? { method: a.payment_method as "terminal" | "efectivo", cashCents: (a.cash_cents as number) ?? undefined } : null,
     changeReady: Boolean(a.change_ready), kitchenAlert: Boolean(a.kitchen_alert),
+    closedByMesero: Boolean(a.closed_by_mesero),
     createdAt: a.created_at instanceof Date ? a.created_at.toISOString() : String(a.created_at ?? ""),
   };
 }
 
 export async function getOrCreateAccount(tableId: number): Promise<Account> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length > 0) {
     const items = await getItems(String(rows[0].id));
@@ -144,7 +147,7 @@ export async function getOrCreateAccount(tableId: number): Promise<Account> {
 
 export async function getOpenAccountByTable(tableId: number): Promise<Account | null> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length === 0) return null;
   return rowToAccount(rows[0], await getItems(String(rows[0].id)));
@@ -204,7 +207,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
 
 export async function getAllAccounts(): Promise<Account[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} ORDER BY created_at DESC LIMIT 50`;
   const out: Account[] = [];
   for (const a of rows) out.push(rowToAccount(a, await getItems(String(a.id))));
@@ -255,6 +258,8 @@ function cutRowToCut(r: Record<string, unknown>): DayCut {
     perTable, totalOrders: (r.total_orders as number) ?? 0, totalCents, cashCents, cardCents,
     unclassifiedCents: totalCents - cashCents - cardCents,
     openAccounts, openAccountsClosed: openAccounts,
+    // Las cerradas sin cobrar del corte ya vienen en openAccountsClosed.
+    closedUnpaid: [],
   };
 }
 
@@ -269,7 +274,7 @@ export async function getTodayCut(): Promise<DayCut | null> {
 export async function getDayData(): Promise<{ summary: DaySummary; cut: DayCut | null }> {
   await ensureDayCutSchema();
   const date = mexicoDateString();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT}
     AND (created_at AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date
     AND cut_date IS NULL ORDER BY created_at ASC`;
@@ -285,7 +290,10 @@ export async function saveDayCut(): Promise<{ cut: DayCut } | { error: string; c
   const existing = await getTodayCut();
   if (existing) return { error: "Ya se hizo el corte de hoy.", cut: existing };
   const { summary } = await getDayData();
-  const openClosed = summary.openAccounts;
+  // Las abiertas se cierran en el corte; las que ya estaban cerradas sin
+  // cobrar (mesero liberó la mesa o caja cerró antes del pago) también
+  // quedan registradas en el corte como pendientes sin cobrar.
+  const openClosed = [...summary.openAccounts, ...summary.closedUnpaid];
   // 1) Cerrar las cuentas abiertas del día: quedan registradas en el
   // corte como pendientes sin cobrar (su dinero NO entra en el total
   // ganado), para que nada se pierda sin rastro.
@@ -380,6 +388,16 @@ export async function setAccountStatus(accountId: string, status: string): Promi
   await ensureColumns();
   if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET status = ${status} WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+// Cierre por el mesero ("Liberar mesa"): la cuenta queda cerrada, la
+// mesa libre para nuevos comensales, y queda marcado que fue el mesero
+// quien la cerró, para que caja reciba el aviso.
+export async function closeAccountByMesero(accountId: string): Promise<Account | null> {
+  await ensureColumns();
+  if (!isUuid(accountId)) return null;
+  await sql`UPDATE accounts SET status = 'cerrada', closed_by_mesero = true WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 

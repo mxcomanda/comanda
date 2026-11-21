@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   payment_method TEXT, cash_cents INT, created_at TIMESTAMPTZ DEFAULT now(),
   closed_at TIMESTAMPTZ
 );
+-- Columnas que la app añade sola con IF NOT EXISTS (ensureColumns):
+-- change_ready, kitchen_alert, closed_by_mesero, cut_date.
 CREATE TABLE IF NOT EXISTS order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), account_id UUID REFERENCES accounts(id),
   menu_item_id INT, name TEXT NOT NULL, price_cents INT NOT NULL, qty INT DEFAULT 1,

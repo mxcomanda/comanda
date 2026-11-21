@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { verifySession } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
-import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, setChangeReady, setKitchenAlert, getDayData, saveDayCut } from "@/lib/pg";
+import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountByMesero, setChangeReady, setKitchenAlert, getDayData, saveDayCut } from "@/lib/pg";
 import { computeDaySummary, mexicoDateString, type DayCut } from "@/lib/daySummary";
 
 function roleOf(req: Request) {
@@ -54,7 +54,9 @@ export async function POST(req: Request) {
     const existing = db.dayCuts.find((c) => c.date === date);
     if (existing) return NextResponse.json({ error: "Ya se hizo el corte de hoy.", cut: existing }, { status: 400 });
     const summary = computeDaySummary(db.accounts, date);
-    const openClosed = summary.openAccounts;
+    // Las abiertas se cierran en el corte; las que ya estaban cerradas
+    // sin cobrar también quedan registradas como pendientes sin cobrar.
+    const openClosed = [...summary.openAccounts, ...summary.closedUnpaid];
     for (const o of openClosed) {
       const a = db.accounts.find((x) => x.id === o.accountId);
       if (a) a.status = "cerrada";
@@ -89,6 +91,24 @@ export async function POST(req: Request) {
     const acc = db.accounts.find((a) => a.id === accountId);
     if (acc) (acc as any).kitchenAlert = true;
     return NextResponse.json({ ok: true, message: "Cocina avisada." });
+  }
+
+  // Cierre por el mesero ("Liberar mesa"): el mesero cierra la cuenta de
+  // su mesa para que entren nuevos comensales. La mesa queda libre y
+  // caja recibe el aviso (closedByMesero). Si hay platillos sin entregar
+  // o la cuenta no está pagada, el cliente pide confirmación antes de
+  // llamar aquí; el servidor no bloquea el cierre, solo lo registra.
+  if (action === "close" && role === "mesero") {
+    if (hasPostgres) {
+      const acc = await closeAccountByMesero(accountId);
+      if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+      return NextResponse.json({ ok: true, account: acc });
+    }
+    const a = db.accounts.find((x) => x.id === accountId);
+    if (!a) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    a.status = "cerrada";
+    (a as any).closedByMesero = true;
+    return NextResponse.json({ ok: true, account: a });
   }
 
   // Solo Caja a partir de aquí.
