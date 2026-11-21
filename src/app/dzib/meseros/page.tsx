@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { DZIB_TABLES } from "@/data/dzib";
 import { STATUS_LABEL } from "@/lib/types";
+import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Meseros: mapa de las 12 mesas, cuentas abiertas con sus platillos y su
 // estado, avisos de "listo para recoger" y de "cambio listo", y botones
@@ -10,6 +11,7 @@ export default function MeserosView() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const staffAlerts = useStaffAlerts();
   function load() {
     fetch("/api/dzib/accounts").then(async (r) => {
       if (!r.ok) { setErr("Sin acceso: entra primero con tu clave en /dzib/personal"); return; }
@@ -26,12 +28,24 @@ export default function MeserosView() {
   const accounts = (data?.accounts ?? []).filter((a: any) => a.status !== "cerrada");
   const ready = accounts.flatMap((a: any) => a.items.filter((i: any) => i.status === "listo").map((i: any) => ({ ...i, tableLabel: a.tableLabel })));
   const changeReady = accounts.filter((a: any) => a.changeReady && a.payment?.method === "efectivo" && a.status !== "cerrada");
+  // Alertas: vibración + bip + banner cuando un platillo queda listo
+  // para recoger o caja marca el cambio listo.
+  useEffect(() => {
+    if (!data) return;
+    const events: StaffEvent[] = [
+      ...ready.map((i: any) => ({ key: `listo:${i.id}`, text: `¡Pedido listo para recoger! ${i.name} (${i.tableLabel})` })),
+      ...changeReady.map((a: any) => ({ key: `cambio:${a.id}`, text: `¡Cambio listo en caja para ${a.tableLabel}! Lleva $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)} de cambio.` })),
+    ];
+    staffAlerts.notify(events);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   const byTable = new Map<number, any>();
   for (const a of accounts) byTable.set(a.tableId, a);
   return (
     <main className="wrap">
       <h2>Dzib — Meseros</h2>
       <p className="muted">Cuentas abiertas por mesa. Se actualiza cada 5 segundos.</p>
+      <StaffAlertUI alerts={staffAlerts} />
       {ready.length > 0 && (
         <div className="alert gold">🔔 ¡Pedido listo para recoger! {ready.map((i: any) => `${i.name} (${i.tableLabel})`).join(" · ")}</div>
       )}

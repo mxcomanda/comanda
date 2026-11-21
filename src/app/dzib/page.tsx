@@ -14,6 +14,9 @@ const MENU = DZIB_DAILY_MENU_TODAY;
 const TIEMPOS = ["primero", "segundo", "tercero"] as const;
 type Tiempo = (typeof TIEMPOS)[number];
 const TIEMPO_LABEL: Record<Tiempo, string> = { primero: "1er tiempo", segundo: "2º tiempo", tercero: "3er tiempo" };
+// Texto de los botones grandes del flujo (el primero dice "Empezar con
+// primer tiempo", como pidió Cesar).
+const REQUEST_LABEL: Record<Tiempo, string> = { primero: "Empezar con primer tiempo", segundo: "Pedir segundo tiempo", tercero: "Pedir tercer tiempo" };
 const WATER = [
   { name: "Agua del día — vaso", priceCents: DZIB_SETTINGS.waterGlassPriceCents, label: "Vaso" },
   { name: "Agua del día — jarra 1 L", priceCents: DZIB_SETTINGS.waterJar1PriceCents, label: "Jarra 1 L" },
@@ -341,7 +344,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             {table && nextToRequest && (
               <>
                 <button type="button" className="big-btn" disabled={!canRequest(nextToRequest)} onClick={() => pedirTiempo(nextToRequest)}>
-                  Pedir {TIEMPO_LABEL[nextToRequest].toLowerCase()}
+                  {REQUEST_LABEL[nextToRequest]}
                 </button>
                 {!canRequest(nextToRequest) && <p className="muted">{blockedReason(nextToRequest)}</p>}
               </>

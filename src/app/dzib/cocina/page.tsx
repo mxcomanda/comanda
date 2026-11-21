@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { STATUS_LABEL } from "@/lib/types";
+import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Cocina: solo los platillos que el comensal ya pidió (los tiempos en
 // espera NO aparecen). Cada platillo avanza: Recibido → En preparación →
@@ -15,6 +16,7 @@ export default function CocinaView() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+  const staffAlerts = useStaffAlerts();
   function load() {
     fetch("/api/dzib/kitchen").then(async (r) => {
       if (!r.ok) { setErr("Sin acceso: entra primero con tu clave en /dzib/personal"); return; }
@@ -37,12 +39,24 @@ export default function CocinaView() {
   // estorban la lista (el mesero y caja ya los ven como entregados).
   const items = (data?.items ?? []).filter((i: any) => i.status !== "entregado");
   const alerts = data?.alerts ?? [];
+  // Alertas: vibración + bip + banner cuando llega una orden nueva o un
+  // mesero llama a cocina.
+  useEffect(() => {
+    if (!data) return;
+    const events: StaffEvent[] = [
+      ...items.map((i: any) => ({ key: `nuevo:${i.id}`, text: `¡Nueva orden! ${i.name} (${i.table})` })),
+      ...alerts.map((a: any) => ({ key: `llamada:${a.accountId}`, text: `¡${a.tableLabel} llamó a cocina!` })),
+    ];
+    staffAlerts.notify(events);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   const byTable: Record<string, any[]> = {};
   for (const i of items) { (byTable[i.table] ??= []).push(i); }
   return (
     <main className="wrap">
       <h2>Dzib — Cocina</h2>
       <p className="muted">Solo platillos pedidos (los tiempos en espera no aparecen hasta que el comensal los pide). Se actualiza cada 5 segundos.</p>
+      <StaffAlertUI alerts={staffAlerts} />
       {alerts.map((a: any) => (
         <div className="alert red" key={a.accountId}>⚠ ¡{a.tableLabel} llamó a cocina! <button type="button" onClick={() => clearAlert(a.accountId)}>Visto</button></div>
       ))}

@@ -105,10 +105,13 @@ button { cursor: pointer; }
 .dzib .pick:last-child { border-bottom: 0; }
 .dzib .pick.selected { background: #fdeeda; border-radius: 10px; padding-left: 10px; padding-right: 10px; }
 .dzib .pick .sel-tag { font-size: 12px; font-weight: 900; color: var(--burnt); text-transform: uppercase; }
-.big-btn { display: block; width: 100%; min-height: 64px; font-size: 20px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; border: 3px solid var(--dzib-ink); border-radius: 16px; background: var(--burnt); color: #fff; box-shadow: 5px 5px 0 var(--dzib-ink); margin: 14px 0; padding: 14px; }
-.big-btn:disabled { background: #cbbfa5; color: #5c5344; box-shadow: 5px 5px 0 #8a7f68; cursor: not-allowed; }
-.big-btn.pay { background: var(--gold); color: var(--dzib-ink); }
-.big-btn.green { background: #2e7d32; }
+/* OJO: .dzib button (más específico) pisa el fondo de .big-btn y dejaba
+   el texto blanco sobre fondo casi blanco = botón "en blanco". Por eso
+   estas reglas llevan el prefijo .dzib para ganarle en especificidad. */
+.dzib .big-btn { display: block; width: 100%; min-height: 64px; font-size: 20px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; border: 3px solid var(--dzib-ink); border-radius: 16px; background: var(--burnt); color: #fff; box-shadow: 5px 5px 0 var(--dzib-ink); margin: 14px 0; padding: 14px; }
+.dzib .big-btn:disabled { background: #cbbfa5; color: #5c5344; box-shadow: 5px 5px 0 #8a7f68; cursor: not-allowed; }
+.dzib .big-btn.pay { background: var(--gold); color: var(--dzib-ink); }
+.dzib .big-btn.green { background: #2e7d32; }
 .alert { border: 3px solid var(--dzib-ink); border-radius: 14px; padding: 14px; margin: 12px 0; font-weight: 700; }
 .alert.red { background: #ffe3e3; border-color: var(--red); }
 .alert.gold { background: #fdf3c9; border-color: var(--gold); }
@@ -128,3 +131,9 @@ button { cursor: pointer; }
 .dzib .pay-row button.active { background: var(--burnt); color: #fff; }
 .dzib .cash-quick button { margin: 4px 6px 4px 0; }
 .dzib .price-first { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--burnt); margin-right: 8px; }
+
+/* ---------- Alertas de personal (vibración + bip + banner) ---------- */
+.alert-enable { display: block; width: 100%; min-height: 52px; font-size: 16px; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; background: var(--yellow); color: var(--dzib-ink); border: 3px solid var(--dzib-ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--dzib-ink); margin: 12px 0; padding: 12px; }
+.alert-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--red); color: #fff; font-weight: 900; font-size: 17px; border-bottom: 3px solid var(--dzib-ink); animation: alert-flash 1s steps(2, start) infinite; }
+.alert-banner button { flex: none; background: #fff; color: var(--dzib-ink); border: 2px solid var(--dzib-ink); border-radius: 999px; padding: 8px 18px; font-weight: 900; }
+@keyframes alert-flash { 0%, 100% { background: var(--red); } 50% { background: #ff8a5c; } }
