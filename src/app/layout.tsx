@@ -7,11 +7,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es-MX">
-      <body>
-        <div className="topbar">Comanda · Menús digitales y pedidos para restaurantes</div>
-        {children}
-        <div className="checker" aria-hidden="true" />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
