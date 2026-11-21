@@ -5,6 +5,10 @@ export type OrderItemStatus = "espera" | "pendiente" | "preparando" | "listo" | 
 export interface OrderItem {
   id: string; name: string; priceCents: number; kitchen: string;
   tiempo?: "primero" | "segundo" | "tercero" | null;
+  // Comida corrida a la que pertenece el platillo (1, 2, 3…). Null =
+  // pedido por separado. Los ítems viejos sin corrida cuentan como
+  // corrida 1 (antes solo se podía pedir una por mesa).
+  corrida?: number | null;
   status: OrderItemStatus; qty: number;
 }
 export interface Account {
@@ -36,16 +40,31 @@ export function menuPriceForThird(soloPriceCents: number): number {
   return soloPriceCents === 7900 ? DZIB_DAILY_MENU_TODAY.sencilloPriceCents : soloPriceCents;
 }
 
+// Total de UNA comida corrida (sus 3 tiempos): si trae los 3, el precio
+// lo define el 3er tiempo; si trae menos, se suma cada uno por separado.
+export function corridaGroupTotal(items: OrderItem[]): number {
+  const tiempos = new Set(items.filter((i) => i.tiempo && i.status !== "cancelado").map((i) => i.tiempo));
+  if (tiempos.has("primero") && tiempos.has("segundo") && tiempos.has("tercero")) {
+    const third = items.find((i) => i.tiempo === "tercero");
+    return menuPriceForThird(third?.priceCents ?? 0);
+  }
+  return items.filter((i) => i.status !== "cancelado").reduce((s, i) => s + i.priceCents * i.qty, 0);
+}
+
 export function computeTotal(items: OrderItem[]): number {
+  // Una corrida por grupo (corrida ?? 1 para los ítems viejos sin grupo).
   const corrida = items.filter((i) => i.tiempo && i.status !== "cancelado");
   const aparte = items.filter((i) => !i.tiempo && i.status !== "cancelado");
   const aparteTotal = aparte.reduce((s, i) => s + i.priceCents * i.qty, 0);
-  const tiempos = new Set(corrida.map((i) => i.tiempo));
-  if (tiempos.has("primero") && tiempos.has("segundo") && tiempos.has("tercero")) {
-    const third = corrida.find((i) => i.tiempo === "tercero");
-    return menuPriceForThird(third?.priceCents ?? 0) + aparteTotal;
+  const groups = new Map<number, OrderItem[]>();
+  for (const i of corrida) {
+    const g = i.corrida ?? 1;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push(i);
   }
-  return corrida.reduce((s, i) => s + i.priceCents * i.qty, 0) + aparteTotal;
+  let total = aparteTotal;
+  for (const g of groups.values()) total += corridaGroupTotal(g);
+  return total;
 }
 
 export const STATUS_LABEL: Record<OrderItemStatus, string> = {

@@ -51,7 +51,12 @@ export default function CocinaView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
   const byTable: Record<string, any[]> = {};
-  for (const i of items) { (byTable[i.table] ??= []).push(i); }
+  for (const i of items) {
+    // Cada corrida se ve por separado: "Mesa 3 · Corrida 1", "Mesa 3 ·
+    // Corrida 2". Lo por separado va aparte.
+    const key = i.tiempo ? `${i.table} · Corrida ${i.corrida ?? 1}` : `${i.table} · Por separado`;
+    (byTable[key] ??= []).push(i);
+  }
   return (
     <main className="wrap">
       <h2>Dzib — Cocina</h2>
@@ -67,7 +72,7 @@ export default function CocinaView() {
           <b>{table}</b>
           {list.map((i: any) => (
             <div className="item" key={i.id}>
-              <div><b>{i.name}</b><div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo}` : "Por separado"} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></div>
+              <div><b>{i.name}</b><div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo} · Corrida ${i.corrida ?? 1}` : "Por separado"} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></div>
               <span>
                 {NEXT_LABEL[i.status] ? (
                   <button type="button" className="staff-btn" onClick={() => advance(i.id)}>{NEXT_LABEL[i.status]}</button>

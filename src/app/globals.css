@@ -134,6 +134,18 @@ button { cursor: pointer; }
 .dzib .cash-quick button { margin: 4px 6px 4px 0; }
 .dzib .price-first { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--burnt); margin-right: 8px; }
 
+/* ---------- Barra superior fija de "Tu pedido" (comensal) ---------- */
+.dzib-topbar { position: sticky; top: 0; z-index: 60; background: var(--dzib-ink); color: #f5efe0; border-bottom: 3px solid var(--gold); }
+.dzib-topbar-inner { max-width: 1080px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.dzib-topbar .badge { background: var(--gold); color: var(--dzib-ink); border-color: var(--gold); }
+.topbar-summary { flex: 1; display: flex; gap: 14px; flex-wrap: wrap; min-width: 200px; }
+.topbar-corrida { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.topbar-total { color: var(--yellow); font-size: 16px; white-space: nowrap; }
+/* ---------- Pestañas de corridas (qué corrida se está armando) ---------- */
+.corrida-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.corrida-tabs button { border-radius: 999px; padding: 8px 16px; font-weight: 800; background: #fff; }
+.corrida-tabs button.active { background: var(--burnt); color: #fff; }
+
 /* ---------- Alertas de personal (vibración + bip + banner) ---------- */
 .alert-enable { display: block; width: 100%; min-height: 52px; font-size: 16px; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; background: var(--yellow); color: var(--dzib-ink); border: 3px solid var(--dzib-ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--dzib-ink); margin: 12px 0; padding: 12px; }
 .alert-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--red); color: #fff; font-weight: 900; font-size: 17px; border-bottom: 3px solid var(--dzib-ink); animation: alert-flash 1s steps(2, start) infinite; }

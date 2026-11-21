@@ -79,7 +79,7 @@ export default function MeserosView() {
           {a.payment && <div className="muted">Pago: {a.payment.method === "efectivo" ? `Efectivo con $${(a.payment.cashCents ?? 0) / 100} · Cambio: $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)}` : "Tarjeta (terminal)"}{a.changeReady ? " · Cambio listo ✓" : ""}</div>}
           {a.items?.map((i: any) => (
             <div className="item" key={i.id}>
-              <span>{i.name}{i.tiempo ? ` · ${i.tiempo}` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
+              <span>{i.name}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
               <span>
                 {i.status !== "espera" && i.status !== "entregado" && i.status !== "cancelado" && (
                   <button type="button" className="staff-btn" onClick={() => post("deliver", { accountId: a.id, itemId: i.id })}>Marcar entregado</button>

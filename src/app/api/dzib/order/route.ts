@@ -3,13 +3,28 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
 import { DZIB_TABLES } from "@/data/dzib";
-import { hasPostgres, getOrCreateAccount, getAccountWithItems, addOrderItems, setAccountPayment } from "@/lib/pg";
+import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment } from "@/lib/pg";
 import type { Account } from "@/lib/types";
 
 // Estado de una cuenta (lo usa el comensal para su panel de Status y el
 // mesero). El id es un UUID, no lleva sesión de personal.
+// GET ?accountId=… → una cuenta por id.
+// GET ?tableId=N → la cuenta ABIERTA de esa mesa (para que el pedido no
+// se pierda al cambiar de dispositivo: cualquier celular con el QR de la
+// mesa ve la misma cuenta y el mismo status, porque la fuente de verdad
+// es Postgres, no el navegador).
 export async function GET(req: Request) {
-  const accountId = new URL(req.url).searchParams.get("accountId") ?? "";
+  const params = new URL(req.url).searchParams;
+  const tableId = Number(params.get("tableId") ?? "");
+  if (tableId) {
+    if (hasPostgres) {
+      const account = await getOpenAccountByTable(tableId);
+      return NextResponse.json({ ok: true, account });
+    }
+    const account = db.accounts.find((a) => a.tableId === tableId && a.status !== "cerrada") ?? null;
+    return NextResponse.json({ ok: true, account });
+  }
+  const accountId = params.get("accountId") ?? "";
   if (!accountId) return NextResponse.json({ error: "Falta la cuenta" }, { status: 400 });
   if (hasPostgres) {
     const account = await getAccountWithItems(accountId);
@@ -55,8 +70,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Falta mesa o platillos" }, { status: 400 });
   const table = DZIB_TABLES.find((t) => t.id === body.tableId);
   if (!table) return NextResponse.json({ error: "Mesa no válida. Pide solo con el QR de tu mesa." }, { status: 400 });
-  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null }) => ({
+  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null }) => ({
     name: String(it.name), priceCents: Number(it.priceCents) || 0, tiempo: it.tiempo ?? null,
+    corrida: it.tiempo ? (Number(it.corrida) || 1) : null,
   }));
   if (hasPostgres) {
     const account = await getOrCreateAccount(table.id);
@@ -72,7 +88,7 @@ export async function POST(req: Request) {
     // Los tiempos del menú van en "espera": NO aparecen en cocina hasta que el
     // comensal los pide en orden (1º, 2º, 3º) con /api/dzib/course.
     const isCourse = Boolean(it.tiempo);
-    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, status: isCourse ? "espera" : "pendiente", qty: 1 });
+    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1 });
   }
   account.totalCents = accountTotal(account.items);
   return NextResponse.json({ ok: true, accountId: account.id, tableLabel: account.tableLabel, totalCents: account.totalCents });

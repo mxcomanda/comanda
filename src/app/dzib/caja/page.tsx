@@ -96,7 +96,7 @@ export default function CajaView() {
               </div>
             ) : <div className="muted">Sin pagar todavía.</div>}
             {a.items?.map((i: any) => (
-              <div className="item" key={i.id}><span>{i.name}{i.tiempo ? ` · ${i.tiempo}` : ""}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+              <div className="item" key={i.id}><span>{i.name}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
             ))}
             <p>
               {a.status === "cuenta-pedida" && (
