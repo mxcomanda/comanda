@@ -53,6 +53,23 @@ async function seedOnce(): Promise<void> {
     ON CONFLICT (restaurant_slug, date) DO UPDATE SET sencillo_price_cents = EXCLUDED.sencillo_price_cents, special_dish = EXCLUDED.special_dish, special_price_cents = EXCLUDED.special_price_cents, notes = EXCLUDED.notes, is_published = true, is_example = false`;
 }
 
+
+// Columnas para cobro y avisos. Las bases creadas con el esquema original
+// no las tienen; se añaden aquí (IF NOT EXISTS) antes de cualquier
+// lectura/escritura de cuentas, para que el primer despliegue no falle
+// aunque nadie haya pegado /api/dzib/menu antes.
+let columnsPromise: Promise<void> | null = null;
+export function ensureColumns(): Promise<void> {
+  if (!hasPostgres) return Promise.resolve();
+  if (!columnsPromise) {
+    columnsPromise = (async () => {
+      await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS change_ready BOOLEAN DEFAULT false`;
+      await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS kitchen_alert BOOLEAN DEFAULT false`;
+    })().catch((e) => { columnsPromise = null; throw e; });
+  }
+  return columnsPromise;
+}
+
 // ---------- PINs ----------
 export async function getStaffPins(): Promise<Record<string, string>> {
   const { rows } = await sql`SELECT role, pin_hash FROM staff_pins WHERE restaurant_slug = ${RESTAURANT}`;
@@ -74,6 +91,7 @@ function tableLabel(tableId: number): string {
 }
 
 export async function getAccountWithItems(accountId: string): Promise<Account | null> {
+  await ensureColumns();
   const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts WHERE id = ${accountId}::uuid`;
   if (rows.length === 0) return null;
   const a = rows[0];
@@ -101,6 +119,7 @@ function rowToAccount(a: Record<string, unknown>, items: OrderItem[]): Account {
 }
 
 export async function getOrCreateAccount(tableId: number): Promise<Account> {
+  await ensureColumns();
   const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length > 0) {
@@ -142,6 +161,7 @@ export async function requestCourse(accountId: string, tiempo: string): Promise<
 }
 
 export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { table: string; accountId: string })[]> {
+  await ensureColumns();
   const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.account_id, a.table_id
     FROM order_items oi JOIN accounts a ON a.id = oi.account_id
     WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status <> 'espera' AND oi.status <> 'cancelado'
@@ -155,6 +175,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
 }
 
 export async function getAllAccounts(): Promise<Account[]> {
+  await ensureColumns();
   const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} ORDER BY created_at DESC LIMIT 50`;
   const out: Account[] = [];
@@ -201,6 +222,7 @@ const NEXT_STATUS: Record<string, string> = {
 };
 
 export async function advanceItemStatus(itemId: string): Promise<{ status: string } | { error: string }> {
+  await ensureColumns();
   const { rows } = await sql`SELECT id, status FROM order_items WHERE id = ${itemId}::uuid`;
   if (rows.length === 0) return { error: "Platillo no encontrado" };
   const current = String(rows[0].status);
@@ -211,31 +233,37 @@ export async function advanceItemStatus(itemId: string): Promise<{ status: strin
 }
 
 export async function setItemStatus(itemId: string, status: string): Promise<boolean> {
+  await ensureColumns();
   const { rowCount } = await sql`UPDATE order_items SET status = ${status} WHERE id = ${itemId}::uuid`;
   return (rowCount ?? 0) > 0;
 }
 
 export async function setAccountPayment(accountId: string, method: "terminal" | "efectivo", cashCents?: number): Promise<Account | null> {
+  await ensureColumns();
   await sql`UPDATE accounts SET status = 'cuenta-pedida', payment_method = ${method}, cash_cents = ${cashCents ?? null} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setAccountStatus(accountId: string, status: string): Promise<Account | null> {
+  await ensureColumns();
   await sql`UPDATE accounts SET status = ${status} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setChangeReady(accountId: string, ready: boolean): Promise<Account | null> {
+  await ensureColumns();
   await sql`UPDATE accounts SET change_ready = ${ready} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setKitchenAlert(accountId: string, alert: boolean): Promise<Account | null> {
+  await ensureColumns();
   await sql`UPDATE accounts SET kitchen_alert = ${alert} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function getKitchenAlerts(): Promise<{ accountId: string; tableLabel: string }[]> {
+  await ensureColumns();
   const { rows } = await sql`SELECT id, table_id FROM accounts WHERE restaurant_slug = ${RESTAURANT} AND kitchen_alert = true AND status <> 'cerrada' ORDER BY created_at ASC`;
   return rows.map((r) => ({ accountId: String(r.id), tableLabel: tableLabel(r.table_id as number) }));
 }
