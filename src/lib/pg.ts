@@ -58,6 +58,12 @@ async function seedOnce(): Promise<void> {
 // no las tienen; se añaden aquí (IF NOT EXISTS) antes de cualquier
 // lectura/escritura de cuentas, para que el primer despliegue no falle
 // aunque nadie haya pegado /api/dzib/menu antes.
+
+// Los ids llegan del cliente; un id mal formado no debe tumbar la ruta
+// con un 500 de Postgres (el cast ::uuid falla), sino devolver 404.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isUuid(v: string): boolean { return UUID_RE.test(v); }
+
 let columnsPromise: Promise<void> | null = null;
 export function ensureColumns(): Promise<void> {
   if (!hasPostgres) return Promise.resolve();
@@ -92,6 +98,7 @@ function tableLabel(tableId: number): string {
 
 export async function getAccountWithItems(accountId: string): Promise<Account | null> {
   await ensureColumns();
+  if (!isUuid(accountId)) return null;
   const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, created_at FROM accounts WHERE id = ${accountId}::uuid`;
   if (rows.length === 0) return null;
   const a = rows[0];
@@ -223,6 +230,7 @@ const NEXT_STATUS: Record<string, string> = {
 
 export async function advanceItemStatus(itemId: string): Promise<{ status: string } | { error: string }> {
   await ensureColumns();
+  if (!isUuid(itemId)) return { error: "Platillo no encontrado" };
   const { rows } = await sql`SELECT id, status FROM order_items WHERE id = ${itemId}::uuid`;
   if (rows.length === 0) return { error: "Platillo no encontrado" };
   const current = String(rows[0].status);
@@ -234,30 +242,35 @@ export async function advanceItemStatus(itemId: string): Promise<{ status: strin
 
 export async function setItemStatus(itemId: string, status: string): Promise<boolean> {
   await ensureColumns();
+  if (!isUuid(itemId)) return false;
   const { rowCount } = await sql`UPDATE order_items SET status = ${status} WHERE id = ${itemId}::uuid`;
   return (rowCount ?? 0) > 0;
 }
 
 export async function setAccountPayment(accountId: string, method: "terminal" | "efectivo", cashCents?: number): Promise<Account | null> {
   await ensureColumns();
+  if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET status = 'cuenta-pedida', payment_method = ${method}, cash_cents = ${cashCents ?? null} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setAccountStatus(accountId: string, status: string): Promise<Account | null> {
   await ensureColumns();
+  if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET status = ${status} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setChangeReady(accountId: string, ready: boolean): Promise<Account | null> {
   await ensureColumns();
+  if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET change_ready = ${ready} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
 
 export async function setKitchenAlert(accountId: string, alert: boolean): Promise<Account | null> {
   await ensureColumns();
+  if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET kitchen_alert = ${alert} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
 }
