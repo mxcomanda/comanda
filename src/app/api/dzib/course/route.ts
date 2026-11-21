@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { db, accountTotal } from "@/lib/store";
+import { hasPostgres, getAccountWithItems, requestCourse } from "@/lib/pg";
+
 const ORDER = ["primero", "segundo", "tercero"] as const;
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
-  const account = db.accounts.find((a) => a.id === body?.accountId && a.status !== "cerrada");
-  if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   const tiempo = body?.tiempo as (typeof ORDER)[number];
   if (!ORDER.includes(tiempo)) return NextResponse.json({ error: "Tiempo no válido" }, { status: 400 });
+  if (hasPostgres) {
+    const account = await getAccountWithItems(String(body?.accountId ?? ""));
+    if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    const result = await requestCourse(account.id, tiempo);
+    if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true, message: "¡Una mesa pidió su tiempo! Avisado a cocina y mesero.", items: result.items });
+  }
+  const account = db.accounts.find((a) => a.id === body?.accountId && a.status !== "cerrada");
+  if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
   const idx = ORDER.indexOf(tiempo);
   // Secuencia estricta: no se puede pedir el 2º sin el 1º, ni el 3º sin el 2º.
   for (let i = 0; i < idx; i++) {
