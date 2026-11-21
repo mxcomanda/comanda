@@ -28,13 +28,18 @@ export default function MeserosView() {
   const accounts = (data?.accounts ?? []).filter((a: any) => a.status !== "cerrada");
   const ready = accounts.flatMap((a: any) => a.items.filter((i: any) => i.status === "listo").map((i: any) => ({ ...i, tableLabel: a.tableLabel })));
   const changeReady = accounts.filter((a: any) => a.changeReady && a.payment?.method === "efectivo" && a.status !== "cerrada");
+  // Mesas que pidieron la cuenta con tarjeta (terminal): el mesero debe
+  // llevar la terminal a la mesa de inmediato.
+  const terminal = accounts.filter((a: any) => a.status === "cuenta-pedida" && a.payment?.method === "terminal");
   // Alertas: vibración + bip + banner cuando un platillo queda listo
-  // para recoger o caja marca el cambio listo.
+  // para recoger, caja marca el cambio listo, o una mesa pide la cuenta
+  // con terminal.
   useEffect(() => {
     if (!data) return;
     const events: StaffEvent[] = [
       ...ready.map((i: any) => ({ key: `listo:${i.id}`, text: `¡Pedido listo para recoger! ${i.name} (${i.tableLabel})` })),
       ...changeReady.map((a: any) => ({ key: `cambio:${a.id}`, text: `¡Cambio listo en caja para ${a.tableLabel}! Lleva $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)} de cambio.` })),
+      ...terminal.map((a: any) => ({ key: `terminal:${a.id}`, text: `${a.tableLabel} pidió la cuenta con terminal — lleva la terminal` })),
     ];
     staffAlerts.notify(events);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,6 +56,9 @@ export default function MeserosView() {
       )}
       {changeReady.map((a: any) => (
         <div className="alert green" key={a.id}>💵 ¡Cambio listo en caja para {a.tableLabel}! Lleva ${((a.payment.cashCents ?? 0) - a.totalCents) / 100} de cambio.</div>
+      ))}
+      {terminal.map((a: any) => (
+        <div className="alert gold" key={a.id}>💳 {a.tableLabel} pidió la cuenta con terminal — lleva la terminal (${(a.totalCents / 100).toFixed(0)}).</div>
       ))}
       <p><button onClick={load}>Actualizar</button></p>
       {msg && <p>{msg}</p>}
