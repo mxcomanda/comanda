@@ -80,6 +80,8 @@ export function ensureColumns(): Promise<void> {
       // (bebida/acompañamiento del desayuno, ingrediente extra escrito).
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS notes TEXT`;
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS detail TEXT`;
+      // Grupo de lo pedido por separado: "desayuno" o NULL (por separado).
+      await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS item_group TEXT`;
       // Llamadas de asistencia al mesero (botón circular del comensal):
       // una fila por llamada, pendiente hasta que el mesero la atiende.
       await sql`CREATE TABLE IF NOT EXISTS assistance_calls (
@@ -126,13 +128,14 @@ export async function getAccountWithItems(accountId: string): Promise<Account | 
 
 async function getItems(accountId: string): Promise<OrderItem[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail FROM order_items WHERE account_id = ${accountId}::uuid ORDER BY created_at ASC`;
+  const { rows } = await sql`SELECT id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group FROM order_items WHERE account_id = ${accountId}::uuid ORDER BY created_at ASC`;
   return rows.map((r) => ({
     id: String(r.id), name: r.name as string, priceCents: r.price_cents as number,
     kitchen: r.kitchen as string, tiempo: (r.tiempo as OrderItem["tiempo"]) ?? null,
     status: r.status as OrderItem["status"], qty: (r.qty as number) ?? 1,
     corrida: (r.corrida as number | null) ?? null,
     notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
+    group: (r.item_group as "desayuno" | null) ?? null,
   }));
 }
 
@@ -167,12 +170,12 @@ export async function getOpenAccountByTable(tableId: number): Promise<Account | 
   return rowToAccount(rows[0], await getItems(String(rows[0].id)));
 }
 
-export async function addOrderItems(accountId: string, items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null }[]): Promise<Account> {
+export async function addOrderItems(accountId: string, items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: "desayuno" | null }[]): Promise<Account> {
   await ensureColumns();
   for (const it of items) {
     const isCourse = Boolean(it.tiempo);
-    await sql`INSERT INTO order_items (account_id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail)
-      VALUES (${accountId}::uuid, ${String(it.name)}, ${Number(it.priceCents) || 0}, 'cocina-a', ${it.tiempo ?? null}, ${isCourse ? "espera" : "pendiente"}, 1, ${it.corrida ?? null}, ${it.notes?.trim() ? it.notes.trim().slice(0, 200) : null}, ${it.detail?.trim() ? it.detail.trim().slice(0, 200) : null})`;
+    await sql`INSERT INTO order_items (account_id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group)
+      VALUES (${accountId}::uuid, ${String(it.name)}, ${Number(it.priceCents) || 0}, 'cocina-a', ${it.tiempo ?? null}, ${isCourse ? "espera" : "pendiente"}, 1, ${it.corrida ?? null}, ${it.notes?.trim() ? it.notes.trim().slice(0, 200) : null}, ${it.detail?.trim() ? it.detail.trim().slice(0, 200) : null}, ${it.group ?? null})`;
   }
   const acc = await getAccountWithItems(accountId);
   if (!acc) throw new Error("Cuenta no encontrada tras crear el pedido");
@@ -192,7 +195,13 @@ export async function setItemNotes(itemId: string, notes: string): Promise<boole
 // Pide un tiempo de UNA corrida (los tiempos de las demás corridas no se
 // tocan). La secuencia 1º→2º→3º se cumple dentro de cada corrida: para
 // pedir el 2º, el 1º de ESA corrida ya no debe estar en espera, y así.
-export async function requestCourse(accountId: string, tiempo: string, corrida?: number | null): Promise<{ items: string[] } | { error: string }> {
+// `notes` (opcional): indicación especial que el comensal escribió para
+// este tiempo y que todavía no se había guardado. Se aplica ANTES de
+// pasar el platillo a pendiente, porque la indicación solo se puede
+// cambiar mientras está en espera: si no se aplicara aquí, una nota
+// escrita después de pedir el 1er tiempo se perdería (el cliente ya no
+// vuelve a enviar el borrador) y cocina nunca la vería.
+export async function requestCourse(accountId: string, tiempo: string, corrida?: number | null, notes?: string | null): Promise<{ items: string[] } | { error: string }> {
   const acc = await getAccountWithItems(accountId);
   if (!acc) return { error: "Cuenta no encontrada" };
   const group = corrida ?? 1;
@@ -207,7 +216,9 @@ export async function requestCourse(accountId: string, tiempo: string, corrida?:
   }
   const waiting = acc.items.filter((it) => mine(it) && it.tiempo === tiempo && it.status === "espera");
   if (waiting.length === 0) return { error: "No hay platillos en espera para ese tiempo" };
+  const cleanNotes = notes?.trim() ? notes.trim().slice(0, 200) : null;
   for (const it of waiting) {
+    if (cleanNotes) await setItemNotes(it.id, cleanNotes);
     await sql`UPDATE order_items SET status = 'pendiente' WHERE id = ${it.id}::uuid`;
   }
   return { items: waiting.map((i) => i.name) };
@@ -215,7 +226,7 @@ export async function requestCourse(accountId: string, tiempo: string, corrida?:
 
 export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { table: string; accountId: string })[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.account_id, a.table_id
+  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.account_id, a.table_id
     FROM order_items oi JOIN accounts a ON a.id = oi.account_id
     WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status <> 'espera' AND oi.status <> 'cancelado'
     AND a.status IN ('abierta', 'cuenta-pedida')
@@ -226,6 +237,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
     status: r.status as OrderItem["status"], qty: (r.qty as number) ?? 1,
     corrida: (r.corrida as number | null) ?? null,
     notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
+    group: (r.item_group as "desayuno" | null) ?? null,
     table: tableLabel(r.table_id as number), accountId: String(r.account_id),
   }));
 }

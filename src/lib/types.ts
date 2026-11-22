@@ -14,6 +14,12 @@ export interface OrderItem {
   // (ej. "sin cebolla y sin cilantro"). Viajan con el platillo y se ven
   // en cocina, meseros, caja y en el status del comensal.
   notes?: string | null;
+  // Grupo de lo pedido por separado: "desayuno" = desayuno (sencillo,
+  // especial, guisado u otra opción) y null = pedido por separado de
+  // comida (plato suelto, agua, extras). Sirve para etiquetarlo como
+  // "Desayunos" en vez de "por separado" en la vista del comensal y en
+  // cocina. Los tiempos de comida corrida no usan este campo.
+  group?: "desayuno" | null;
   // Detalle elegido por el comensal: en desayunos sencillos, la bebida y
   // el acompañamiento ("Café de olla · Jugo de naranja"); en el
   // ingrediente extra, el ingrediente escrito ("queso extra"). No cambia

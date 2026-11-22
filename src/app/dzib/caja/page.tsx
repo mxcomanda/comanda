@@ -84,7 +84,7 @@ export default function CajaView() {
             {a.closedByMesero && <div className="muted">🔓 Liberada por el mesero — lista para nuevos comensales.</div>}
             {a.items?.map((i: any) => (
               <div key={i.id}>
-                <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+                <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Comida ${i.corrida ?? 1})` : ""}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
                 {i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}
               </div>
             ))}

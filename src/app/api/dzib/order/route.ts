@@ -92,10 +92,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Falta mesa o platillos" }, { status: 400 });
   const table = DZIB_TABLES.find((t) => t.id === body.tableId);
   if (!table) return NextResponse.json({ error: "Mesa no válida. Pide solo con el QR de tu mesa." }, { status: 400 });
-  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null }) => ({
+  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: string | null }) => ({
     name: String(it.name), priceCents: Number(it.priceCents) || 0, tiempo: it.tiempo ?? null,
     corrida: it.tiempo ? (Number(it.corrida) || 1) : null,
     notes: String(it.notes ?? "").trim() || null, detail: String(it.detail ?? "").trim() || null,
+    group: it.group === "desayuno" ? "desayuno" as const : null,
   }));
   if (hasPostgres) {
     const account = await getOrCreateAccount(table.id);
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
     // Los tiempos del menú van en "espera": NO aparecen en cocina hasta que el
     // comensal los pide en orden (1º, 2º, 3º) con /api/dzib/course.
     const isCourse = Boolean(it.tiempo);
-    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1, notes: it.notes, detail: it.detail });
+    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1, notes: it.notes, detail: it.detail, group: it.group });
   }
   account.totalCents = accountTotal(account.items);
   return NextResponse.json({ ok: true, accountId: account.id, tableLabel: account.tableLabel, totalCents: account.totalCents });

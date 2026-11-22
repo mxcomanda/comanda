@@ -27,7 +27,7 @@ const WATER = [
   { name: "Agua del día — jarra 2.5 L", priceCents: DZIB_SETTINGS.waterJar25PriceCents, label: "Jarra 2.5 L" },
 ];
 
-type Extra = { key: string; name: string; priceCents: number; detail?: string; notes?: string };
+type Extra = { key: string; name: string; priceCents: number; detail?: string; notes?: string; group?: "desayuno" | "separado" };
 type Sel = Record<Tiempo, any>;
 const emptySel = (): Sel => ({ primero: null, segundo: null, tercero: null });
 // Bebida y acompañamiento incluidos en los desayunos sencillos ($82).
@@ -203,7 +203,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     const idx = TIEMPOS.indexOf(t);
     for (let i = 0; i < idx; i++) {
       const prev = TIEMPOS[i];
-      if (selFor(id)[prev] && !served(prev, id)) return `Se activa cuando te sirvan el ${TIEMPO_LABEL[prev]} de esta corrida.`;
+      if (selFor(id)[prev] && !served(prev, id)) return `Se activa cuando te sirvan el ${TIEMPO_LABEL[prev]} de esta comida.`;
     }
     return "";
   };
@@ -226,6 +226,15 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const readyItems = accItems.filter((i) => i.status === "listo");
   const changeReady = Boolean(account?.changeReady) && account?.payment?.method === "efectivo";
   const sentExtras = accItems.filter((i) => !i.tiempo);
+  // Desayunos y por separado, separados: lo pendiente (todavía en este
+  // navegador) y lo ya enviado (en la cuenta). Un desayuno nunca se
+  // etiqueta "por separado".
+  const pendingBreakfast = extras.filter((e) => e.group === "desayuno");
+  const pendingSeparate = extras.filter((e) => e.group !== "desayuno");
+  const pendingBreakfastTotal = pendingBreakfast.reduce((s, e) => s + e.priceCents, 0);
+  const pendingSeparateTotal = pendingSeparate.reduce((s, e) => s + e.priceCents, 0);
+  const sentBreakfast = sentExtras.filter((i) => i.group === "desayuno");
+  const sentSeparate = sentExtras.filter((i) => i.group !== "desayuno");
 
   // Pagar aparece cuando todo lo elegido ya se pidió: cada corrida con
   // platillos tiene sus tiempos pedidos y no quedan extras sin enviar.
@@ -235,27 +244,31 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     (corridasWithDishes.length > 0 ? allCorridasRequested : extrasSent);
 
   // ---- Acciones ----
-  function addExtra(name: string, priceCents: number, detail?: string) {
-    setExtras((prev) => [...prev, { key: `x-${Date.now()}-${prev.length}`, name, priceCents, detail }]);
+  // group: "desayuno" = desayuno (sencillo, especial, guisado, otra
+  // opción o extra de desayuno) y "separado" = pedido por separado de
+  // comida (plato suelto, agua). El grupo viaja al servidor para que el
+  // desayuno se etiquete "Desayunos" y no "por separado".
+  function addExtra(name: string, priceCents: number, detail?: string, group: "desayuno" | "separado" = "separado") {
+    setExtras((prev) => [...prev, { key: `x-${Date.now()}-${prev.length}`, name, priceCents, detail, group }]);
   }
   // Agregar un desayuno sencillo con su bebida y acompañamiento elegidos
   // (incluidos en el $82, sin costo extra).
   function addBreakfast(item: any) {
     const pick = breakfastPick;
     const detail = pick && pick.id === item.id ? `${pick.drink} · ${pick.side}` : "Café de olla · Jugo de naranja";
-    addExtra(item.name, item.priceCents, detail);
+    addExtra(item.name, item.priceCents, detail, "desayuno");
     setBreakfastPick(null);
     setMsg(`${item.name} agregado (${detail}).`);
   }
   // Agregar el ingrediente extra: hay que escribir cuál es.
-  function addIngredientExtra(item: any) {
+  function addIngredientExtra(item: any, group: "desayuno" | "separado" = "desayuno") {
     const text = extraIngredientText.trim();
     if (!text) { setMsg("Escribe qué ingrediente extra necesitas (ej. queso extra)."); return; }
-    addExtra(item.name, item.priceCents, text);
+    addExtra(item.name, item.priceCents, text, group);
     setExtraIngredientText("");
     setMsg(`Ingrediente extra agregado: ${text}.`);
   }
-  async function sendOrder(items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null }[]): Promise<string | null> {
+  async function sendOrder(items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: "desayuno" | null }[]): Promise<string | null> {
     if (!table) { setMsg("Escanea el QR de tu mesa para pedir."); return null; }
     const res = await fetch("/api/dzib/order", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tableId: table.id, items }) });
@@ -279,11 +292,15 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       if (!id) return;
       setDrafts((prev) => prev.filter((d) => d.id !== corridaId));
     }
+    // La indicación especial viaja CON el pedido del tiempo: si el
+    // comensal la escribió después de pedir el 1er tiempo, ya no está en
+    // el borrador y solo vive en el navegador; si no se mandara aquí, se
+    // perdería y cocina nunca la vería.
     const res = await fetch("/api/dzib/course", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId: id, tiempo: t, corrida: corridaId }) });
+      body: JSON.stringify({ accountId: id, tiempo: t, corrida: corridaId, notes: tiempoNotes[`${corridaId}:${t}`]?.trim() || null }) });
     const data = await res.json().catch(() => null);
     if (!res.ok) { setMsg(data?.error ?? "No se pudo pedir el tiempo"); return; }
-    setMsg(`¡${TIEMPO_LABEL[t]} de la Corrida ${corridaId} pedido! Cocina y tu mesero ya fueron avisados.`);
+    setMsg(`¡${TIEMPO_LABEL[t]} de la Comida ${corridaId} pedido! Cocina y tu mesero ya fueron avisados.`);
     fetchAccount(id);
   }
   function addCorrida() {
@@ -305,7 +322,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   }
   async function sendExtras() {
     if (extras.length === 0) { setMsg("Agrega algo por separado primero."); return; }
-    const items = extras.map((e) => ({ name: e.name, priceCents: e.priceCents, tiempo: null, corrida: null, notes: e.notes?.trim() || null, detail: e.detail || null }));
+    const items = extras.map((e) => ({ name: e.name, priceCents: e.priceCents, tiempo: null, corrida: null, notes: e.notes?.trim() || null, detail: e.detail || null, group: e.group === "desayuno" ? "desayuno" as const : null }));
     const id = accountId ? accountId : await sendOrder(items);
     if (!id) return;
     if (accountId) {
@@ -357,7 +374,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       <div className="item"><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (i.category === "desayuno" ? (
         <button type="button" onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>Elegir</button>
       ) : (
-        <button type="button" onClick={() => addExtra(i.name, i.priceCents)}>Agregar</button>
+        <button type="button" onClick={() => addExtra(i.name, i.priceCents, undefined, "desayuno")}>Agregar</button>
       ))}</span></div>
       {pick && pick.id === i.id && (
         <div style={{ border: "2px solid var(--gold)", borderRadius: 12, padding: 12, margin: "4px 0 10px" }}>
@@ -381,8 +398,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     );
   };
   // Fila del ingrediente extra: hay que escribir cuál se necesita.
-  const extraIngredientRow = (i: any) => (
-    <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">Escribe qué ingrediente necesitas</div><input placeholder="Ej. queso extra" value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" onClick={() => addIngredientExtra(i)}>Agregar</button>}</span></div>
+  // group: "desayuno" cuando se agrega desde Desayunos, "separado"
+  // cuando se agrega desde "Pedir por separado".
+  const extraIngredientRow = (i: any, group: "desayuno" | "separado" = "desayuno") => (
+    <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">Escribe qué ingrediente necesitas</div><input placeholder="Ej. queso extra" value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" onClick={() => addIngredientExtra(i, group)}>Agregar</button>}</span></div>
   );
   const editingSel = selFor(editingId);
   const editingSent = isSent(editingId);
@@ -390,7 +409,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const pagarPanel = showPay ? (
     <div className="card" style={{ marginTop: 14 }}>
       <b>Pagar — Total de tu cuenta: {mxn(accountTotal)}</b>
-      <p className="muted">Un solo pago por todo: tus corridas y lo por separado.</p>
+      <p className="muted">Un solo pago por todo: tus comidas, tus desayunos y lo por separado.</p>
       <div className="pay-row">
         <button type="button" className={payMethod === "terminal" ? "active" : ""} onClick={() => setPayMethod("terminal")}>💳 Tarjeta (terminal)</button>
         <button type="button" className={payMethod === "efectivo" ? "active" : ""} onClick={() => setPayMethod("efectivo")}>💵 Efectivo</button>
@@ -423,7 +442,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       <b>Estado de tu pedido — {account?.tableLabel}</b>
       {allCorridaIds.map((id) => (
         <div key={id}>
-          <h3 style={{ marginTop: 12 }}>Corrida {id}</h3>
+          <h3 style={{ marginTop: 12 }}>Comida {id}</h3>
           {TIEMPOS.map((t) => {
             const item = accItems.find((i) => i.tiempo === t && corridaOf(i) === id);
             const name = item?.name ?? selFor(id)[t]?.name;
@@ -438,7 +457,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       ))}
       {sentExtras.map((i) => (
         <div key={i.id}>
-          <div className="item"><span>{i.name} (por separado){i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+          <div className="item"><span>{i.name} ({i.group === "desayuno" ? "Desayunos" : "por separado"}){i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
           {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
         </div>
       ))}
@@ -469,9 +488,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 ? "Todavía no pides nada — elige abajo."
                 : allCorridaIds.map((id) => {
                     const names = TIEMPOS.filter((t) => selFor(id)[t]).map((t) => selFor(id)[t].name);
-                    return <span key={id} className="topbar-corrida">Corrida {id}: {names.length > 0 ? names.join(" · ") : "sin elegir"} · {mxn(corridaTotal(id))}</span>;
+                    return <span key={id} className="topbar-corrida">Comida {id}: {names.length > 0 ? names.join(" · ") : "sin elegir"} · {mxn(corridaTotal(id))}</span>;
                   })}
-              {extras.length > 0 && <span className="topbar-corrida">Por separado: {extras.length} · {mxn(extrasTotal)}</span>}
+              {pendingBreakfast.length > 0 && <span className="topbar-corrida">Desayunos: {pendingBreakfast.length} · {mxn(pendingBreakfastTotal)}</span>}
+              {pendingSeparate.length > 0 && <span className="topbar-corrida">Por separado: {pendingSeparate.length} · {mxn(pendingSeparateTotal)}</span>}
             </span>
             <b className="topbar-total">Total: {mxn(grandTotal)}</b>
           </div>
@@ -507,22 +527,22 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         {/* ---------- MENÚ DE COMIDA DEL DÍA ---------- */}
         <Accordion title="Menú de comida del día" sub="Menú sencillo de 3 tiempos · $91" open={openSection === "comida"} onToggle={() => setOpenSection(openSection === "comida" ? null : "comida")}>
           <p className="dzib-today"><b>Menú sencillo de 3 tiempos</b> (no incluye agua ni postre). Servicio de 1:30 pm a 7:00 pm. Todos nuestros precios incluyen IVA.</p>
-          <p className="muted"><b>El precio lo define tu 3er tiempo:</b> menú de <b>$91</b> con los guisados (pescaditos, filete empanizado, sierra, ceviche…), menú de <b>$78</b> con pollo a la pibil y ensaladas, o el precio del especial que elijas ($140 a $190). El 1er y el 2º tiempo van <b>incluidos</b>. El 2º tiempo solo, fuera de la corrida, cuesta $26.</p>
+          <p className="muted"><b>El precio lo define tu 3er tiempo:</b> menú de <b>$91</b> con los guisados (pescaditos, filete empanizado, sierra, ceviche…), menú de <b>$78</b> con pollo a la pibil y ensaladas, o el precio del especial que elijas ($140 a $190). El 1er y el 2º tiempo van <b>incluidos</b>. El 2º tiempo solo, fuera de la comida, cuesta $26.</p>
           {/* ¿Qué corrida estás armando? Cada una se pide a su ritmo. */}
           <div className="corrida-tabs">
             <span><b>Armar:</b></span>
             {allCorridaIds.map((id) => (
               <button key={id} type="button" className={editingId === id ? "active" : ""} onClick={() => { setEditingId(id); setOpenTiempo("primero"); }}>
-                Corrida {id}{isSent(id) ? " ✓" : ""}
+                Comida {id}{isSent(id) ? " ✓" : ""}
               </button>
             ))}
-            {table && <button type="button" onClick={addCorrida}>＋ Agregar otra comida corrida</button>}
+            {table && <button type="button" onClick={addCorrida}>＋ Agregar otra comida</button>}
           </div>
-          {editingSent && <p className="muted">La Corrida {editingId} ya se pidió — sus platillos y su botón están abajo, en “Tu pedido”. Elige otra corrida arriba para armarla.</p>}
+          {editingSent && <p className="muted">La Comida {editingId} ya se pidió — sus platillos y su botón están abajo, en “Tu pedido”. Elige otra comida arriba para armarla.</p>}
           {TIEMPOS.map((t) => (
             <SubAcc key={t} title={`${TIEMPO_LABEL[t]}${t === "tercero" ? " · el precio define tu menú" : " · Incluido"}`} open={openTiempo === t} onToggle={() => setOpenTiempo(openTiempo === t ? null : t)}>
               {t === "primero" && <p className="muted">El 1er tiempo está incluido en el menú.</p>}
-              {t === "segundo" && <p className="muted">El 2º tiempo está incluido en el menú. Solo, fuera de la corrida, cuesta $26.</p>}
+              {t === "segundo" && <p className="muted">El 2º tiempo está incluido en el menú. Solo, fuera de la comida, cuesta $26.</p>}
               {MENU.items.filter((i) => i.tiempo === t).map((i) => {
                 const chosen = editingSel[t]?.id === i.id;
                 if (t === "tercero") {
@@ -541,12 +561,17 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 );
               })}
               <p className="muted">Toca un platillo para elegirlo (uno por tiempo). Toca de nuevo para quitarlo.</p>
-              {table && !editingSent && (
-                <label style={{ display: "block", marginTop: 10 }}>Indicaciones especiales para el {TIEMPO_LABEL[t]} de la Corrida {editingId} (opcional)
-                  <input placeholder="Ej. sin cebolla y sin cilantro" value={tiempoNotes[`${editingId}:${t}`] ?? ""} onChange={(e) => setTiempoNotes((prev) => ({ ...prev, [`${editingId}:${t}`]: e.target.value }))} style={{ marginTop: 6 }} />
+              {/* La indicación se puede escribir mientras el tiempo siga
+                  en espera, aunque la comida ya se haya empezado a pedir:
+                  antes el campo desaparecía al pedir el 1er tiempo y la
+                  nota solo se podía poner en "Tu pedido". Al pedir el
+                  tiempo, la nota viaja con el pedido a cocina. */}
+              {table && !requested(t, editingId) && (
+                <label style={{ display: "block", marginTop: 10 }}>Indicaciones especiales para el {TIEMPO_LABEL[t]} de la Comida {editingId} (opcional)
+                  <input placeholder="Ej. sin cebolla y sin cilantro" value={tiempoNotes[`${editingId}:${t}`] ?? accItems.find((i) => i.tiempo === t && corridaOf(i) === editingId)?.notes ?? ""} onChange={(e) => setTiempoNotes((prev) => ({ ...prev, [`${editingId}:${t}`]: e.target.value }))} style={{ marginTop: 6 }} />
                 </label>
               )}
-              {editingSent && (() => {
+              {requested(t, editingId) && (() => {
                 const item = accItems.find((i) => i.tiempo === t && corridaOf(i) === editingId);
                 return item?.notes ? <p className="notes-line">⚠ Indicaciones: {item.notes}</p> : null;
               })()}
@@ -580,7 +605,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             {WATER.map((w) => (
               <div className="item" key={w.name}><div><b>{w.label}</b><div className="muted">Agua del día · Precio por confirmar</div></div><span>{mxn(w.priceCents)} {addBtn(w.name, w.priceCents)}</span></div>
             ))}
-            {extrasList.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i) : (
+            {extrasList.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i, "separado") : (
               <div className="item" key={i.id}><div><b>{i.name}</b></div><span>{mxn(i.priceCents)} {addBtn(i.name, i.priceCents)}</span></div>
             )))}
           </SubAcc>
@@ -589,14 +614,14 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         {/* ---------- TU PEDIDO (fuera de los submenús, hasta abajo) ---------- */}
         <div className="card" style={{ marginTop: 18 }}>
           <b>Tu pedido — {table?.label ?? "sin mesa"}</b>
-          {allCorridaIds.length === 0 && <p className="muted">Todavía no armas ninguna comida corrida. Elige tus tiempos arriba, en “Menú de comida del día”.</p>}
+          {allCorridaIds.length === 0 && <p className="muted">Todavía no armas ninguna comida. Elige tus tiempos arriba, en “Menú de comida del día”.</p>}
           {allCorridaIds.map((id) => {
             const sel = selFor(id);
             const chosen = TIEMPOS.filter((t) => sel[t]);
             const next = nextToRequest(id);
             return (
               <div key={id} style={{ borderTop: "2px dashed #bbb", paddingTop: 10, marginTop: 10 }}>
-                <b>Corrida {id}{isSent(id) ? " · Pedida ✓" : " · Armando"}</b>
+                <b>Comida {id}{isSent(id) ? " · Pedida ✓" : " · Armando"}</b>
                 {chosen.length === 0 ? (
                   <p className="muted">Sin platillos todavía — elígelos arriba en “Menú de comida del día”.</p>
                 ) : (
@@ -617,7 +642,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                   })())
                 )}
                 {chosen.length > 0 && (
-                  <p><b>{chosen.length === 3 ? `Tu menú: ${mxn(corridaTotal(id))}` : `Total de esta corrida: ${mxn(corridaTotal(id))}`}</b>{chosen.length === 3 ? ` · El precio lo definió tu 3er tiempo (${sel.tercero?.name})` : ""}</p>
+                  <p><b>{chosen.length === 3 ? `Tu menú: ${mxn(corridaTotal(id))}` : `Total de esta comida: ${mxn(corridaTotal(id))}`}</b>{chosen.length === 3 ? ` · El precio lo definió tu 3er tiempo (${sel.tercero?.name})` : ""}</p>
                 )}
                 {table && next && (
                   <>
@@ -628,37 +653,72 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                   </>
                 )}
                 {table && !next && chosen.length > 0 && (
-                  <p><b>Tus tiempos de esta corrida ya están pedidos ✓</b></p>
+                  <p><b>Tus tiempos de esta comida ya están pedidos ✓</b></p>
                 )}
               </div>
             );
           })}
           {table && (
-            <p><button type="button" onClick={addCorrida}>＋ Agregar otra comida corrida</button></p>
+            <p><button type="button" onClick={addCorrida}>＋ Agregar otra comida</button></p>
           )}
           {!table && <p className="muted">Escanea el QR de tu mesa para pedir.</p>}
         </div>
 
-        {/* Por separado: lo que agregaste y el botón de enviar a cocina. */}
+        {/* Desayunos y por separado: lo que agregaste y el botón de enviar
+            a cocina. Los desayunos van en su propio grupo ("Desayunos"),
+            no mezclados con lo por separado. */}
         <div className="card" style={{ marginTop: 14 }}>
-          <b>Por separado</b>
-          {sentExtras.map((i) => (
-            <div key={i.id}>
-              <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
-              {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
-            </div>
-          ))}
-          {extras.length === 0 ? (
-            <p className="muted">Todavía no agregaste nada por separado.</p>
-          ) : (
+          <b>Desayunos y por separado</b>
+          {sentBreakfast.length > 0 && (
             <>
-              {extras.map((e) => (
+              <p style={{ marginTop: 10 }}><b>Desayunos — enviados ✓</b></p>
+              {sentBreakfast.map((i) => (
+                <div key={i.id}>
+                  <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+                  {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
+                </div>
+              ))}
+            </>
+          )}
+          {sentSeparate.length > 0 && (
+            <>
+              <p style={{ marginTop: 10 }}><b>Por separado — enviados ✓</b></p>
+              {sentSeparate.map((i) => (
+                <div key={i.id}>
+                  <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+                  {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
+                </div>
+              ))}
+            </>
+          )}
+          {pendingBreakfast.length > 0 && (
+            <>
+              <p style={{ marginTop: 10 }}><b>Desayunos</b></p>
+              {pendingBreakfast.map((e) => (
                 <div key={e.key}>
                   <div className="item"><span>{e.name}{e.detail ? <span className="detail-line"> · {e.detail}</span> : ""}</span><span>{mxn(e.priceCents)} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>Quitar</button></span></div>
                   <input placeholder="Indicaciones especiales (opcional)" value={e.notes ?? ""} onChange={(ev) => setExtras(extras.map((x) => (x.key === e.key ? { ...x, notes: ev.target.value } : x)))} style={{ margin: "4px 0 10px" }} />
                 </div>
               ))}
-              <p><b>Total por separado (sin enviar): {mxn(extrasTotal)}</b></p>
+            </>
+          )}
+          {pendingSeparate.length > 0 && (
+            <>
+              <p style={{ marginTop: 10 }}><b>Por separado</b></p>
+              {pendingSeparate.map((e) => (
+                <div key={e.key}>
+                  <div className="item"><span>{e.name}{e.detail ? <span className="detail-line"> · {e.detail}</span> : ""}</span><span>{mxn(e.priceCents)} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>Quitar</button></span></div>
+                  <input placeholder="Indicaciones especiales (opcional)" value={e.notes ?? ""} onChange={(ev) => setExtras(extras.map((x) => (x.key === e.key ? { ...x, notes: ev.target.value } : x)))} style={{ margin: "4px 0 10px" }} />
+                </div>
+              ))}
+            </>
+          )}
+          {extras.length === 0 && sentExtras.length === 0 && (
+            <p className="muted">Todavía no agregaste desayunos ni nada por separado.</p>
+          )}
+          {extras.length > 0 && (
+            <>
+              <p><b>Total sin enviar: {mxn(extrasTotal)}</b>{pendingBreakfast.length > 0 && pendingSeparate.length > 0 ? ` (Desayunos ${mxn(pendingBreakfastTotal)} · Por separado ${mxn(pendingSeparateTotal)})` : ""}</p>
               <button type="button" className="big-btn" onClick={sendExtras}>Enviar pedido a cocina</button>
             </>
           )}

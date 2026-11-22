@@ -129,7 +129,7 @@ export default function MeserosView() {
           {a.items?.map((i: any) => (
             <div key={i.id}>
               <div className="item">
-                <span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
+                <span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Comida ${i.corrida ?? 1})` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
                 <span>
                   {i.status !== "espera" && i.status !== "entregado" && i.status !== "cancelado" && (
                     <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`listo:${i.id}`]); void post("deliver", { accountId: a.id, itemId: i.id }); }}>Marcar entregado</button>

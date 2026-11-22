@@ -10,10 +10,15 @@ export async function POST(req: Request) {
   if (!ORDER.includes(tiempo)) return NextResponse.json({ error: "Tiempo no válido" }, { status: 400 });
   // Corrida que se está pidiendo (1, 2…); cada corrida avanza a su ritmo.
   const corrida = Number(body?.corrida) || 1;
+  // Indicación especial que el comensal escribió para este tiempo y que
+  // aún no se había guardado (p. ej. la escribió después de pedir el 1er
+  // tiempo): viaja con el pedido para que cocina la vea. Sin esto, la
+  // nota solo vivía en el navegador y se perdía al pedir el tiempo.
+  const notes = typeof body?.notes === "string" && body.notes.trim() ? body.notes.trim().slice(0, 200) : null;
   if (hasPostgres) {
     const account = await getAccountWithItems(String(body?.accountId ?? ""));
     if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-    const result = await requestCourse(account.id, tiempo, corrida);
+    const result = await requestCourse(account.id, tiempo, corrida, notes);
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, message: "¡Una mesa pidió su tiempo! Avisado a cocina y mesero.", items: result.items });
   }
@@ -29,6 +34,9 @@ export async function POST(req: Request) {
   }
   const items = account.items.filter((it) => it.tiempo === tiempo && (it.corrida ?? 1) === corrida && it.status === "espera");
   if (items.length === 0) return NextResponse.json({ error: "No hay platillos en espera para ese tiempo" }, { status: 400 });
+  // La indicación viaja con el pedido: se guarda antes de pasar el
+  // platillo a pendiente (después ya no se puede cambiar).
+  if (notes) items.forEach((it) => { it.notes = notes; });
   items.forEach((it) => { it.status = "pendiente"; });
   account.totalCents = accountTotal(account.items);
   return NextResponse.json({ ok: true, message: "¡Una mesa pidió su tiempo! Avisado a cocina y mesero.", items: items.map((i) => i.name) });
