@@ -42,6 +42,12 @@ export default function CocinaView() {
   // estorban la lista (el mesero y caja ya los ven como entregados).
   const items = (data?.items ?? []).filter((i: any) => i.status !== "entregado");
   const alerts = data?.alerts ?? [];
+  // Indicaciones anticipadas: tiempos que el comensal ya escribió con
+  // indicación especial pero que todavía no pidió (siguen en espera).
+  // Se ven aquí desde que se escriben — antes solo el mesero las veía y
+  // parecía que a cocina "no le llegaban". NO se cocinan todavía: son
+  // solo para que cocina sepa de antemano qué quitarle al platillo.
+  const waitingNotes = data?.waitingNotes ?? [];
   // Alertas: vibración + bip + banner cuando llega una orden nueva o un
   // mesero llama a cocina. Solo los platillos que todavía no se empezaron
   // a preparar ("pendiente") son órdenes nuevas: en cuanto cocina marca
@@ -68,13 +74,24 @@ export default function CocinaView() {
   return (
     <main className="wrap">
       <h2>Dzib — Cocina</h2>
-      <p className="muted">Solo platillos pedidos (los tiempos en espera no aparecen hasta que el comensal los pide). Se actualiza cada 5 segundos.</p>
+      <p className="muted">Solo platillos pedidos (los tiempos en espera no aparecen hasta que el comensal los pide). Las indicaciones que el comensal ya escribió para los próximos tiempos se ven abajo en “Próximos tiempos”. Se actualiza cada 5 segundos.</p>
       <StaffAlertUI alerts={staffAlerts} />
       {alerts.map((a: any) => (
         <div className="alert red" key={a.accountId}>⚠ ¡{a.tableLabel} llamó a cocina! <button type="button" onClick={() => clearAlert(a.accountId)}>Visto</button></div>
       ))}
       <p><button onClick={load}>Actualizar</button></p>
       {msg && <p>{msg}</p>}
+      {waitingNotes.length > 0 && (
+        <div className="card" style={{ marginBottom: 12, borderColor: "#c9a227" }}>
+          <b>⏳ Próximos tiempos — indicaciones anticipadas</b>
+          <p className="muted" style={{ margin: "6px 0" }}>Estos tiempos todavía NO se pidieron: no los cocines aún. El comensal ya escribió su indicación, y se muestra aquí desde ahora para que sepas de antemano qué quitarle al platillo. Cuando los pida, aparecerán arriba con su indicación.</p>
+          {waitingNotes.map((i: any) => (
+            <div className="item" key={i.id}>
+              <div><b>{i.name}</b><div className="muted">{i.table}{i.tiempo ? ` · Tiempo: ${i.tiempo} · Comida ${i.corrida ?? 1}` : ""} · Todavía no pedido</div>{i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {err ? <p className="danger">{err}</p> : items.length === 0 ? <p className="muted">No hay platillos pendientes.</p> : Object.entries(byTable).map(([table, list]) => (
         <div className="card" key={table} style={{ marginBottom: 12 }}>
           <b>{table}</b>

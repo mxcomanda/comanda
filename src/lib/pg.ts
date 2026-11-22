@@ -242,6 +242,32 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
   }));
 }
 
+// Indicaciones anticipadas: tiempos que el comensal ya escribió con
+// indicación especial pero que TODAVÍA NO pidió (siguen en "espera").
+// Cocina no debe cocinarlos aún, pero SÍ debe ver la indicación desde
+// que se escribe: el botón del siguiente tiempo solo se activa cuando el
+// anterior ya se sirvió, así que la nota puede vivir en espera varios
+// minutos — y en ese lapso el mesero ya la veía pero cocina no, lo que
+// parecía que "no le llegaba a cocina". Se muestran en su propia sección
+// ("Próximos tiempos"), sin botones de avance.
+export async function getWaitingNotes(): Promise<(OrderItem & { table: string; accountId: string })[]> {
+  await ensureColumns();
+  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.account_id, a.table_id
+    FROM order_items oi JOIN accounts a ON a.id = oi.account_id
+    WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status = 'espera' AND oi.notes IS NOT NULL AND oi.notes <> ''
+    AND a.status IN ('abierta', 'cuenta-pedida')
+    AND (oi.kitchen = 'cocina-a' OR oi.kitchen = 'ambas') ORDER BY oi.created_at ASC`;
+  return rows.map((r) => ({
+    id: String(r.id), name: r.name as string, priceCents: r.price_cents as number,
+    kitchen: r.kitchen as string, tiempo: (r.tiempo as OrderItem["tiempo"]) ?? null,
+    status: r.status as OrderItem["status"], qty: (r.qty as number) ?? 1,
+    corrida: (r.corrida as number | null) ?? null,
+    notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
+    group: (r.item_group as "desayuno" | null) ?? null,
+    table: tableLabel(r.table_id as number), accountId: String(r.account_id),
+  }));
+}
+
 export async function getAllAccounts(): Promise<Account[]> {
   await ensureColumns();
   const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts

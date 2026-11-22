@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { verifySession } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
-import { hasPostgres, getKitchenItems, getKitchenAlerts, advanceItemStatus, setKitchenAlert } from "@/lib/pg";
+import { hasPostgres, getKitchenItems, getWaitingNotes, getKitchenAlerts, advanceItemStatus, setKitchenAlert } from "@/lib/pg";
 
 function roleOf(req: Request) {
   return verifySession(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
@@ -16,12 +16,16 @@ export async function GET(req: Request) {
   const kitchen = new URL(req.url).searchParams.get("kitchen") ?? "cocina-a";
   if (hasPostgres) {
     const items = await getKitchenItems(kitchen);
+    const waitingNotes = await getWaitingNotes();
     const alerts = await getKitchenAlerts();
-    return NextResponse.json({ role, kitchen, items, alerts });
+    return NextResponse.json({ role, kitchen, items, waitingNotes, alerts });
   }
   const items = db.accounts.filter((a) => a.status === "abierta" || a.status === "cuenta-pedida").flatMap((a) => a.items.filter((i) => i.status !== "espera" && i.status !== "cancelado" && (i.kitchen === kitchen || i.kitchen === "ambas")).map((i) => ({ ...i, table: a.tableLabel, accountId: a.id })));
+  // Tiempos en espera que ya tienen indicación especial: cocina los ve
+  // en su sección aparte, sin cocinarlos aún (ver getWaitingNotes).
+  const waitingNotes = db.accounts.filter((a) => a.status === "abierta" || a.status === "cuenta-pedida").flatMap((a) => a.items.filter((i) => i.status === "espera" && i.notes && (i.kitchen === kitchen || i.kitchen === "ambas")).map((i) => ({ ...i, table: a.tableLabel, accountId: a.id })));
   const alerts = db.accounts.filter((a) => (a as any).kitchenAlert && a.status !== "cerrada").map((a) => ({ accountId: a.id, tableLabel: a.tableLabel }));
-  return NextResponse.json({ role, kitchen, items, alerts });
+  return NextResponse.json({ role, kitchen, items, waitingNotes, alerts });
 }
 
 // Avanza el estado de un platillo: pendiente → preparando → listo → entregado.
