@@ -27,9 +27,12 @@ const WATER = [
   { name: "Agua del día — jarra 2.5 L", priceCents: DZIB_SETTINGS.waterJar25PriceCents, label: "Jarra 2.5 L" },
 ];
 
-type Extra = { key: string; name: string; priceCents: number };
+type Extra = { key: string; name: string; priceCents: number; detail?: string; notes?: string };
 type Sel = Record<Tiempo, any>;
 const emptySel = (): Sel => ({ primero: null, segundo: null, tercero: null });
+// Bebida y acompañamiento incluidos en los desayunos sencillos ($82).
+const DRINKS = ["Café de olla", "Té"] as const;
+const SIDES = ["Jugo de naranja", "Fruta (papaya con plátano)"] as const;
 
 function Accordion({ title, sub, open, onToggle, children }: { title: string; sub?: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
@@ -70,6 +73,16 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const [editingId, setEditingId] = useState(1);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [extrasSent, setExtrasSent] = useState(false);
+  // Elección de bebida/acompañamiento de un desayuno sencillo: qué
+  // platillo tiene el selector abierto y qué lleva elegido (por defecto,
+  // café de olla + jugo de naranja). Solo los sencillos incluyen esto.
+  const [breakfastPick, setBreakfastPick] = useState<{ id: number; drink: string; side: string } | null>(null);
+  // Texto del ingrediente extra (hay que escribirlo para poder agregarlo).
+  const [extraIngredientText, setExtraIngredientText] = useState("");
+  // Indicaciones especiales por tiempo de cada corrida: clave
+  // "corridaId:tiempo" (ej. "1:segundo" → "sin cebolla y sin cilantro").
+  // Viajan con el platillo a cocina cuando se pide ese tiempo.
+  const [tiempoNotes, setTiempoNotes] = useState<Record<string, string>>({});
   const [accountId, setAccountId] = useState("");
   const [account, setAccount] = useState<any>(null);
   const [msg, setMsg] = useState("");
@@ -192,10 +205,27 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     (corridasWithDishes.length > 0 ? allCorridasRequested : extrasSent);
 
   // ---- Acciones ----
-  function addExtra(name: string, priceCents: number) {
-    setExtras((prev) => [...prev, { key: `x-${Date.now()}-${prev.length}`, name, priceCents }]);
+  function addExtra(name: string, priceCents: number, detail?: string) {
+    setExtras((prev) => [...prev, { key: `x-${Date.now()}-${prev.length}`, name, priceCents, detail }]);
   }
-  async function sendOrder(items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null }[]): Promise<string | null> {
+  // Agregar un desayuno sencillo con su bebida y acompañamiento elegidos
+  // (incluidos en el $82, sin costo extra).
+  function addBreakfast(item: any) {
+    const pick = breakfastPick;
+    const detail = pick && pick.id === item.id ? `${pick.drink} · ${pick.side}` : "Café de olla · Jugo de naranja";
+    addExtra(item.name, item.priceCents, detail);
+    setBreakfastPick(null);
+    setMsg(`${item.name} agregado (${detail}).`);
+  }
+  // Agregar el ingrediente extra: hay que escribir cuál es.
+  function addIngredientExtra(item: any) {
+    const text = extraIngredientText.trim();
+    if (!text) { setMsg("Escribe qué ingrediente extra necesitas (ej. queso extra)."); return; }
+    addExtra(item.name, item.priceCents, text);
+    setExtraIngredientText("");
+    setMsg(`Ingrediente extra agregado: ${text}.`);
+  }
+  async function sendOrder(items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null }[]): Promise<string | null> {
     if (!table) { setMsg("Escanea el QR de tu mesa para pedir."); return null; }
     const res = await fetch("/api/dzib/order", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tableId: table.id, items }) });
@@ -212,8 +242,9 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     const draft = visibleDrafts.find((d) => d.id === corridaId);
     if (draft) {
       // Primera vez que se pide algo de esta corrida: enviar sus platillos
-      // elegidos (quedan en espera) y luego pedir este tiempo.
-      const items = TIEMPOS.filter((tt) => sel[tt]).map((tt) => ({ name: sel[tt].name, priceCents: sel[tt].soloPriceCents, tiempo: tt, corrida: corridaId }));
+      // elegidos (quedan en espera) y luego pedir este tiempo. Cada
+      // platillo lleva su indicación especial, si el comensal escribió una.
+      const items = TIEMPOS.filter((tt) => sel[tt]).map((tt) => ({ name: sel[tt].name, priceCents: sel[tt].soloPriceCents, tiempo: tt, corrida: corridaId, notes: tiempoNotes[`${corridaId}:${tt}`]?.trim() || null }));
       id = await sendOrder(items);
       if (!id) return;
       setDrafts((prev) => prev.filter((d) => d.id !== corridaId));
@@ -232,9 +263,19 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     setOpenSection("comida");
     setOpenTiempo("primero");
   }
+  // Guardar la indicación especial de un tiempo que todavía está en
+  // espera (aún no se pidió). Una vez pedido, queda fija.
+  async function saveNotes(itemId: string, notes: string) {
+    const res = await fetch("/api/dzib/order", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "notes", itemId, notes }) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) { setMsg(data?.error ?? "No se pudo guardar la indicación"); return; }
+    setMsg("Indicación guardada — cocina la verá con tu tiempo.");
+    fetchAccount(accountId);
+  }
   async function sendExtras() {
     if (extras.length === 0) { setMsg("Agrega algo por separado primero."); return; }
-    const items = extras.map((e) => ({ name: e.name, priceCents: e.priceCents, tiempo: null, corrida: null }));
+    const items = extras.map((e) => ({ name: e.name, priceCents: e.priceCents, tiempo: null, corrida: null, notes: e.notes?.trim() || null, detail: e.detail || null }));
     const id = accountId ? accountId : await sendOrder(items);
     if (!id) return;
     if (accountId) {
@@ -274,6 +315,44 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const addBtn = (name: string, priceCents: number) => table ? (
     <button type="button" onClick={() => addExtra(name, priceCents)}>Agregar</button>
   ) : null;
+  // Fila de un desayuno: los sencillos (categoría "desayuno") incluyen
+  // café de olla o té y jugo de naranja o fruta; al tocar "Elegir" se
+  // abre el selector y se agregan con su elección (sin costo extra).
+  // Especiales y otras opciones se agregan directo, sin elección.
+  const breakfastItemRow = (i: any) => {
+    const pick = breakfastPick;
+    return (
+    <div key={i.id}>
+      <div className="item"><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (i.category === "desayuno" ? (
+        <button type="button" onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>Elegir</button>
+      ) : (
+        <button type="button" onClick={() => addExtra(i.name, i.priceCents)}>Agregar</button>
+      ))}</span></div>
+      {pick && pick.id === i.id && (
+        <div style={{ border: "2px solid var(--gold)", borderRadius: 12, padding: 12, margin: "4px 0 10px" }}>
+          <p style={{ margin: "0 0 6px" }}><b>¿Qué quieres con tu desayuno?</b> <span className="muted">(incluido en los $82)</span></p>
+          <p style={{ margin: "6px 0" }}>Bebida:</p>
+          <div className="pay-row">
+            {DRINKS.map((d) => (
+              <button key={d} type="button" className={pick.drink === d ? "active" : ""} onClick={() => setBreakfastPick({ ...pick, drink: d })}>{d}</button>
+            ))}
+          </div>
+          <p style={{ margin: "6px 0" }}>Acompañamiento:</p>
+          <div className="pay-row">
+            {SIDES.map((s) => (
+              <button key={s} type="button" className={pick.side === s ? "active" : ""} onClick={() => setBreakfastPick({ ...pick, side: s })}>{s}</button>
+            ))}
+          </div>
+          <button type="button" className="big-btn" style={{ margin: "10px 0 0" }} onClick={() => addBreakfast(i)}>Agregar desayuno — {mxn(i.priceCents)}</button>
+        </div>
+      )}
+    </div>
+    );
+  };
+  // Fila del ingrediente extra: hay que escribir cuál se necesita.
+  const extraIngredientRow = (i: any) => (
+    <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">Escribe qué ingrediente necesitas</div><input placeholder="Ej. queso extra" value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" onClick={() => addIngredientExtra(i)}>Agregar</button>}</span></div>
+  );
   const editingSel = selFor(editingId);
   const editingSent = isSent(editingId);
 
@@ -318,13 +397,19 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             const item = accItems.find((i) => i.tiempo === t && corridaOf(i) === id);
             const name = item?.name ?? selFor(id)[t]?.name;
             return (
-              <div className="item" key={t}><span>{TIEMPO_LABEL[t]}{name ? ` · ${name}` : ""}</span><span className={`status-pill ${item?.status ?? "espera"}`}>{tiempoStatus(t, id)}</span></div>
+              <div key={t}>
+                <div className="item"><span>{TIEMPO_LABEL[t]}{name ? ` · ${name}` : ""}{item?.detail ? <span className="detail-line"> · {item.detail}</span> : ""}</span><span className={`status-pill ${item?.status ?? "espera"}`}>{tiempoStatus(t, id)}</span></div>
+                {item?.notes && <p className="notes-line">⚠ Indicaciones: {item.notes}</p>}
+              </div>
             );
           })}
         </div>
       ))}
       {sentExtras.map((i) => (
-        <div className="item" key={i.id}><span>{i.name} (por separado)</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+        <div key={i.id}>
+          <div className="item"><span>{i.name} (por separado){i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+          {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
+        </div>
       ))}
       <p><b>Total de tu cuenta: {mxn(accountTotal)}</b></p>
       <p> Pago: {account?.status === "cuenta-pedida" ? "Cuenta pedida — esperando a caja" : account?.status === "pagada" ? "Pagado ✓" : account?.status === "cerrada" ? "Cuenta cerrada" : "Pendiente (paga cuando termines tus tiempos)"}</p>
@@ -380,9 +465,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           <p className="muted">Desayunos sencillos incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
           {breakfastGroups.map((g) => (
             <SubAcc key={g.key} title={g.title} open={openBreakfast === g.key} onToggle={() => setOpenBreakfast(openBreakfast === g.key ? null : g.key)}>
-              {g.items.map((i) => (
-                <div className="item" key={i.id}><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {addBtn(i.name, i.priceCents)}</span></div>
-              ))}
+              {g.items.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i) : breakfastItemRow(i)))}
             </SubAcc>
           ))}
           <p className="muted">Lo que agregues aquí se cobra por separado, a su precio individual.</p>
@@ -425,6 +508,15 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 );
               })}
               <p className="muted">Toca un platillo para elegirlo (uno por tiempo). Toca de nuevo para quitarlo.</p>
+              {table && !editingSent && (
+                <label style={{ display: "block", marginTop: 10 }}>Indicaciones especiales para el {TIEMPO_LABEL[t]} de la Corrida {editingId} (opcional)
+                  <input placeholder="Ej. sin cebolla y sin cilantro" value={tiempoNotes[`${editingId}:${t}`] ?? ""} onChange={(e) => setTiempoNotes((prev) => ({ ...prev, [`${editingId}:${t}`]: e.target.value }))} style={{ marginTop: 6 }} />
+                </label>
+              )}
+              {editingSent && (() => {
+                const item = accItems.find((i) => i.tiempo === t && corridaOf(i) === editingId);
+                return item?.notes ? <p className="notes-line">⚠ Indicaciones: {item.notes}</p> : null;
+              })()}
             </SubAcc>
           ))}
 
@@ -444,9 +536,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         <Accordion title="Pedir por separado" sub="A la carta · precio individual" open={openSection === "separado"} onToggle={() => setOpenSection(openSection === "separado" ? null : "separado")}>
           <p className="muted">Cualquier platillo por su precio individual, fuera del menú sencillo. Se envía directo a cocina.</p>
           <SubAcc title="Desayunos" open={openBreakfast === "sep-des"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-des" ? null : "sep-des")}>
-            {DZIB_BREAKFAST.filter((i) => i.category !== "extra").map((i) => (
-              <div className="item" key={i.id}><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {addBtn(i.name, i.priceCents)}</span></div>
-            ))}
+            {DZIB_BREAKFAST.filter((i) => i.category !== "extra").map((i) => breakfastItemRow(i))}
           </SubAcc>
           <SubAcc title="Comida suelta — por tiempo" open={openBreakfast === "sep-comida"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-comida" ? null : "sep-comida")}>
             {MENU.items.map((i) => (
@@ -457,9 +547,9 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             {WATER.map((w) => (
               <div className="item" key={w.name}><div><b>{w.label}</b><div className="muted">Agua del día · Precio por confirmar</div></div><span>{mxn(w.priceCents)} {addBtn(w.name, w.priceCents)}</span></div>
             ))}
-            {extrasList.map((i) => (
+            {extrasList.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i) : (
               <div className="item" key={i.id}><div><b>{i.name}</b></div><span>{mxn(i.priceCents)} {addBtn(i.name, i.priceCents)}</span></div>
-            ))}
+            )))}
           </SubAcc>
         </Accordion>
 
@@ -477,9 +567,21 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 {chosen.length === 0 ? (
                   <p className="muted">Sin platillos todavía — elígelos arriba en “Menú de comida del día”.</p>
                 ) : (
-                  TIEMPOS.map((t) => sel[t] && (
-                    <div className="item" key={t}><span>{TIEMPO_LABEL[t]} · {sel[t].name}</span><span>{t === "tercero" ? mxn(menuPriceForThird(sel[t].soloPriceCents)) : "Incluido"} · {tiempoStatus(t, id)}</span></div>
-                  ))
+                  TIEMPOS.map((t) => sel[t] && (() => {
+                    const item = accItems.find((i) => i.tiempo === t && corridaOf(i) === id);
+                    return (
+                      <div key={t}>
+                        <div className="item"><span>{TIEMPO_LABEL[t]} · {sel[t].name}</span><span>{t === "tercero" ? mxn(menuPriceForThird(sel[t].soloPriceCents)) : "Incluido"} · {tiempoStatus(t, id)}</span></div>
+                        {item?.notes && item.status !== "espera" && <p className="notes-line">⚠ Indicaciones: {item.notes}</p>}
+                        {item && item.status === "espera" && (
+                          <div style={{ margin: "4px 0 10px" }}>
+                            <input placeholder="Indicaciones especiales (ej. sin cebolla y sin cilantro)" value={tiempoNotes[`${id}:${t}`] ?? item.notes ?? ""} onChange={(e) => setTiempoNotes((prev) => ({ ...prev, [`${id}:${t}`]: e.target.value }))} />
+                            <button type="button" style={{ marginTop: 6 }} onClick={() => saveNotes(item.id, tiempoNotes[`${id}:${t}`] ?? item.notes ?? "")}>Guardar indicación</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })())
                 )}
                 {chosen.length > 0 && (
                   <p><b>{chosen.length === 3 ? `Tu menú: ${mxn(corridaTotal(id))}` : `Total de esta corrida: ${mxn(corridaTotal(id))}`}</b>{chosen.length === 3 ? ` · El precio lo definió tu 3er tiempo (${sel.tercero?.name})` : ""}</p>
@@ -508,14 +610,20 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         <div className="card" style={{ marginTop: 14 }}>
           <b>Por separado</b>
           {sentExtras.map((i) => (
-            <div className="item" key={i.id}><span>{i.name}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+            <div key={i.id}>
+              <div className="item"><span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
+              {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
+            </div>
           ))}
           {extras.length === 0 ? (
             <p className="muted">Todavía no agregaste nada por separado.</p>
           ) : (
             <>
               {extras.map((e) => (
-                <div className="item" key={e.key}><span>{e.name}</span><span>{mxn(e.priceCents)} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>Quitar</button></span></div>
+                <div key={e.key}>
+                  <div className="item"><span>{e.name}{e.detail ? <span className="detail-line"> · {e.detail}</span> : ""}</span><span>{mxn(e.priceCents)} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>Quitar</button></span></div>
+                  <input placeholder="Indicaciones especiales (opcional)" value={e.notes ?? ""} onChange={(ev) => setExtras(extras.map((x) => (x.key === e.key ? { ...x, notes: ev.target.value } : x)))} style={{ margin: "4px 0 10px" }} />
+                </div>
               ))}
               <p><b>Total por separado (sin enviar): {mxn(extrasTotal)}</b></p>
               <button type="button" className="big-btn" onClick={sendExtras}>Enviar pedido a cocina</button>

@@ -134,6 +134,15 @@ button { cursor: pointer; }
 .dzib .cash-quick button { margin: 4px 6px 4px 0; }
 .dzib .price-first { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--burnt); margin-right: 8px; }
 
+/* ---------- Indicaciones especiales y detalles del pedido ---------- */
+/* La indicación especial (ej. "sin cebolla y sin cilantro") se ve GRANDE
+   y clara en cocina, meseros y caja, junto al platillo, para que no se
+   les pase. El detalle es la bebida/acompañamiento del desayuno o el
+   ingrediente extra escrito por el comensal. */
+.notes-box { border: 3px solid var(--red); background: #ffe3e3; border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-weight: 900; font-size: 17px; line-height: 1.35; color: #7a1503; }
+.notes-line { font-weight: 800; color: #7a1503; margin: 4px 0; }
+.detail-line { font-weight: 700; color: var(--burnt); }
+
 /* ---------- Barra superior fija de "Tu pedido" (comensal) ---------- */
 .dzib-topbar { position: sticky; top: 0; z-index: 60; background: var(--dzib-ink); color: #f5efe0; border-bottom: 3px solid var(--gold); }
 .dzib-topbar-inner { max-width: 1080px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }

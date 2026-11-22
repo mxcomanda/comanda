@@ -10,6 +10,15 @@ export interface OrderItem {
   // corrida 1 (antes solo se podía pedir una por mesa).
   corrida?: number | null;
   status: OrderItemStatus; qty: number;
+  // Indicaciones especiales del comensal para este platillo/tiempo
+  // (ej. "sin cebolla y sin cilantro"). Viajan con el platillo y se ven
+  // en cocina, meseros, caja y en el status del comensal.
+  notes?: string | null;
+  // Detalle elegido por el comensal: en desayunos sencillos, la bebida y
+  // el acompañamiento ("Café de olla · Jugo de naranja"); en el
+  // ingrediente extra, el ingrediente escrito ("queso extra"). No cambia
+  // el precio (ya está incluido).
+  detail?: string | null;
 }
 export interface Account {
   id: string; tableId: number; tableLabel: string; items: OrderItem[];

@@ -79,7 +79,7 @@ export default function CocinaView() {
           <b>{table}</b>
           {list.map((i: any) => (
             <div className="item" key={i.id}>
-              <div><b>{i.name}</b><div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo} · Corrida ${i.corrida ?? 1}` : "Por separado"} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></div>
+              <div><b>{i.name}</b>{i.detail && <div className="detail-line">{i.detail}</div>}<div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo} · Corrida ${i.corrida ?? 1}` : "Por separado"} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div>{i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}</div>
               <span>
                 {NEXT_LABEL[i.status] ? (
                   <button type="button" className="staff-btn" onClick={() => advance(i.id)}>{NEXT_LABEL[i.status]}</button>

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
 import { DZIB_TABLES } from "@/data/dzib";
-import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment } from "@/lib/pg";
+import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment, setItemNotes } from "@/lib/pg";
 import type { Account } from "@/lib/types";
 
 // Estado de una cuenta (lo usa el comensal para su panel de Status y el
@@ -39,6 +39,28 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
 
+  // Actualizar las indicaciones especiales de un platillo que todavía
+  // está en espera (el comensal aún no pidió ese tiempo).
+  if (body?.action === "notes") {
+    const itemId = String(body.itemId ?? "");
+    const notes = String(body.notes ?? "");
+    if (!itemId) return NextResponse.json({ error: "Falta el platillo" }, { status: 400 });
+    if (hasPostgres) {
+      const ok = await setItemNotes(itemId, notes);
+      if (!ok) return NextResponse.json({ error: "Ya no se puede cambiar la indicación de ese platillo" }, { status: 400 });
+      return NextResponse.json({ ok: true });
+    }
+    for (const a of db.accounts) {
+      const it = a.items.find((i) => i.id === itemId);
+      if (it) {
+        if (it.status !== "espera") return NextResponse.json({ error: "Ya no se puede cambiar la indicación de ese platillo" }, { status: 400 });
+        it.notes = notes.trim() || null;
+        return NextResponse.json({ ok: true });
+      }
+    }
+    return NextResponse.json({ error: "Platillo no encontrado" }, { status: 404 });
+  }
+
   // Pagar: lo pide el comensal desde su mesa. Tarjeta (terminal) o
   // efectivo (con el billete/cantidad, para calcular el cambio en caja).
   if (body?.action === "pay") {
@@ -70,9 +92,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Falta mesa o platillos" }, { status: 400 });
   const table = DZIB_TABLES.find((t) => t.id === body.tableId);
   if (!table) return NextResponse.json({ error: "Mesa no válida. Pide solo con el QR de tu mesa." }, { status: 400 });
-  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null }) => ({
+  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null }) => ({
     name: String(it.name), priceCents: Number(it.priceCents) || 0, tiempo: it.tiempo ?? null,
     corrida: it.tiempo ? (Number(it.corrida) || 1) : null,
+    notes: String(it.notes ?? "").trim() || null, detail: String(it.detail ?? "").trim() || null,
   }));
   if (hasPostgres) {
     const account = await getOrCreateAccount(table.id);
@@ -88,7 +111,7 @@ export async function POST(req: Request) {
     // Los tiempos del menú van en "espera": NO aparecen en cocina hasta que el
     // comensal los pide en orden (1º, 2º, 3º) con /api/dzib/course.
     const isCourse = Boolean(it.tiempo);
-    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1 });
+    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1, notes: it.notes, detail: it.detail });
   }
   account.totalCents = accountTotal(account.items);
   return NextResponse.json({ ok: true, accountId: account.id, tableLabel: account.tableLabel, totalCents: account.totalCents });

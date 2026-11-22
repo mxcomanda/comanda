@@ -111,14 +111,17 @@ export default function MeserosView() {
           <b>{a.tableLabel}</b> — {a.status} — Total: ${(a.totalCents / 100).toFixed(0)}
           {a.payment && <div className="muted">Pago: {a.payment.method === "efectivo" ? `Efectivo con $${(a.payment.cashCents ?? 0) / 100} · Cambio: $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)}` : "Tarjeta (terminal)"}{a.changeReady ? " · Cambio listo ✓" : ""}</div>}
           {a.items?.map((i: any) => (
-            <div className="item" key={i.id}>
-              <span>{i.name}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
-              <span>
-                {i.status !== "espera" && i.status !== "entregado" && i.status !== "cancelado" && (
-                  <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`listo:${i.id}`]); void post("deliver", { accountId: a.id, itemId: i.id }); }}>Marcar entregado</button>
-                )}
-                {i.status === "entregado" && <span className="status-pill entregado">Entregado ✓</span>}
-              </span>
+            <div key={i.id}>
+              <div className="item">
+                <span>{i.name}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Corrida ${i.corrida ?? 1})` : ""}<div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
+                <span>
+                  {i.status !== "espera" && i.status !== "entregado" && i.status !== "cancelado" && (
+                    <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`listo:${i.id}`]); void post("deliver", { accountId: a.id, itemId: i.id }); }}>Marcar entregado</button>
+                  )}
+                  {i.status === "entregado" && <span className="status-pill entregado">Entregado ✓</span>}
+                </span>
+              </div>
+              {i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}
             </div>
           ))}
           {pendingItems.length > 0 && <p className="muted">⚠ Sin entregar: {pendingItems.map((i: any) => i.name).join(", ")}</p>}
