@@ -160,3 +160,7 @@ button { cursor: pointer; }
 .alert-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--red); color: #fff; font-weight: 900; font-size: 17px; border-bottom: 3px solid var(--dzib-ink); animation: alert-flash 1s steps(2, start) infinite; }
 .alert-banner button { flex: none; background: #fff; color: var(--dzib-ink); border: 2px solid var(--dzib-ink); border-radius: 999px; padding: 8px 18px; font-weight: 900; }
 @keyframes alert-flash { 0%, 100% { background: var(--red); } 50% { background: #ff8a5c; } }
+
+/* ---------- Botón circular fijo "Asistencia mesero" (comensal) ---------- */
+.dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 96px; height: 96px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 4px 4px 0 var(--dzib-ink); font-weight: 900; font-size: 13px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; }
+.dzib .fab-waiter:disabled { background: #2e7d32; color: #fff; }

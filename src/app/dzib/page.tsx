@@ -73,10 +73,11 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const [editingId, setEditingId] = useState(1);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [extrasSent, setExtrasSent] = useState(false);
-  // Elección de bebida/acompañamiento de un desayuno sencillo: qué
-  // platillo tiene el selector abierto y qué lleva elegido (por defecto,
-  // café de olla + jugo de naranja). Solo los sencillos incluyen esto.
-  const [breakfastPick, setBreakfastPick] = useState<{ id: number; drink: string; side: string } | null>(null);
+  // Elección de bebida/acompañamiento de un desayuno sencillo o del
+  // guisado del día: qué platillo tiene el selector abierto y qué lleva
+  // elegido (por defecto, café de olla + jugo de naranja). Solo los
+  // sencillos y el guisado incluyen esto.
+  const [breakfastPick, setBreakfastPick] = useState<{ id: number | string; drink: string; side: string } | null>(null);
   // Texto del ingrediente extra (hay que escribirlo para poder agregarlo).
   const [extraIngredientText, setExtraIngredientText] = useState("");
   // Indicaciones especiales por tiempo de cada corrida: clave
@@ -86,6 +87,35 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const [accountId, setAccountId] = useState("");
   const [account, setAccount] = useState<any>(null);
   const [msg, setMsg] = useState("");
+  // Asistencia al mesero: botón circular fijo. La llamada queda guardada
+  // y meseros la ve con vibración/bip/banner; el botón muestra "Mesero
+  // en camino" hasta que la atiendan (se consulta cada 5 s, igual que
+  // el resto del pedido).
+  const [assistanceCall, setAssistanceCall] = useState<any>(null);
+  const [assistanceBusy, setAssistanceBusy] = useState(false);
+  async function fetchAssistance() {
+    if (!table) return;
+    const res = await fetch(`/api/dzib/assistance?tableId=${table.id}`);
+    const data = await res.json().catch(() => null);
+    if (res.ok) setAssistanceCall(data?.call ?? null);
+  }
+  useEffect(() => {
+    if (!table) return;
+    fetchAssistance();
+    const t = setInterval(fetchAssistance, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table?.id]);
+  async function callWaiter() {
+    if (!table || assistanceCall || assistanceBusy) return;
+    setAssistanceBusy(true);
+    const res = await fetch("/api/dzib/assistance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tableId: table.id }) });
+    const data = await res.json().catch(() => null);
+    setAssistanceBusy(false);
+    if (!res.ok) { setMsg(data?.error ?? "No se pudo llamar al mesero"); return; }
+    setAssistanceCall(data.call);
+    setMsg("¡Listo! Tu mesero va en camino.");
+  }
   const [payMethod, setPayMethod] = useState<"terminal" | "efectivo" | null>(null);
   const [cash, setCash] = useState("");
   const [payResult, setPayResult] = useState<{ changeCents: number } | null>(null);
@@ -315,10 +345,11 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const addBtn = (name: string, priceCents: number) => table ? (
     <button type="button" onClick={() => addExtra(name, priceCents)}>Agregar</button>
   ) : null;
-  // Fila de un desayuno: los sencillos (categoría "desayuno") incluyen
-  // café de olla o té y jugo de naranja o fruta; al tocar "Elegir" se
-  // abre el selector y se agregan con su elección (sin costo extra).
-  // Especiales y otras opciones se agregan directo, sin elección.
+  // Fila de un desayuno: los sencillos (categoría "desayuno") y el
+  // guisado del día incluyen café de olla o té y jugo de naranja o
+  // fruta; al tocar "Elegir" se abre el selector y se agregan con su
+  // elección (sin costo extra). Especiales y otras opciones se agregan
+  // directo, sin elección.
   const breakfastItemRow = (i: any) => {
     const pick = breakfastPick;
     return (
@@ -330,7 +361,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       ))}</span></div>
       {pick && pick.id === i.id && (
         <div style={{ border: "2px solid var(--gold)", borderRadius: 12, padding: 12, margin: "4px 0 10px" }}>
-          <p style={{ margin: "0 0 6px" }}><b>¿Qué quieres con tu desayuno?</b> <span className="muted">(incluido en los $82)</span></p>
+          <p style={{ margin: "0 0 6px" }}><b>¿Qué quieres con tu desayuno?</b> <span className="muted">(incluido en los {mxn(i.priceCents)})</span></p>
           <p style={{ margin: "6px 0" }}>Bebida:</p>
           <div className="pay-row">
             {DRINKS.map((d) => (
@@ -461,8 +492,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
 
         {/* ---------- DESAYUNOS ---------- */}
         <Accordion title="Desayunos" sub="Hasta las 12:30 pm" open={openSection === "desayunos"} onToggle={() => setOpenSection(openSection === "desayunos" ? null : "desayunos")}>
-          <div className="item"><div><b>{DZIB_SETTINGS.guisadoDelDia}</b><div className="muted">Guisado de hoy</div></div><span>{mxn(DZIB_SETTINGS.guisadoPriceCents)} {addBtn(DZIB_SETTINGS.guisadoDelDia, DZIB_SETTINGS.guisadoPriceCents)}</span></div>
-          <p className="muted">Desayunos sencillos incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
+          {/* El guisado del día ($78) también incluye café/té y jugo/fruta,
+              igual que los sencillos: se agrega con el mismo selector. */}
+          {breakfastItemRow({ id: "guisado", name: DZIB_SETTINGS.guisadoDelDia, description: "Guisado de hoy", priceCents: DZIB_SETTINGS.guisadoPriceCents, category: "desayuno" })}
+          <p className="muted">Desayunos sencillos y guisado del día incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
           {breakfastGroups.map((g) => (
             <SubAcc key={g.key} title={g.title} open={openBreakfast === g.key} onToggle={() => setOpenBreakfast(openBreakfast === g.key ? null : g.key)}>
               {g.items.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i) : breakfastItemRow(i)))}
@@ -640,6 +673,14 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         )}
         <p><a href="/dzib/personal">Personal</a></p>
       </main>
+      {/* Botón circular fijo "Asistencia mesero": siempre visible con
+          mesa (QR). Llama al mesero; mientras la llamada está pendiente
+          muestra "Mesero en camino" y no se puede tocar dos veces. */}
+      {table && (
+        <button type="button" className="fab-waiter" disabled={Boolean(assistanceCall) || assistanceBusy} onClick={callWaiter}>
+          {assistanceCall || assistanceBusy ? "Mesero en camino…" : "🔔 Asistencia mesero"}
+        </button>
+      )}
     </div>
   );
 }

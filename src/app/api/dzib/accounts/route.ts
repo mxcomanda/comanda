@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { verifySession } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
-import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountByMesero, setChangeReady, setKitchenAlert, getDayData, saveDayCut } from "@/lib/pg";
+import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountByMesero, setChangeReady, setKitchenAlert, getDayData, saveDayCut, getOpenAssistanceCalls, attendAssistance } from "@/lib/pg";
 import { computeDaySummary, mexicoDateString, type DayCut } from "@/lib/daySummary";
 
 function roleOf(req: Request) {
@@ -16,19 +16,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Tu rol no tiene acceso a Meseros / cuentas" }, { status: 403 });
   if (hasPostgres) {
     const accounts = await getAllAccounts();
+    const assistance = await getOpenAssistanceCalls();
     if (role === "caja") {
       const { summary, cut } = await getDayData();
-      return NextResponse.json({ role, accounts, summary, cut });
+      return NextResponse.json({ role, accounts, assistance, summary, cut });
     }
-    return NextResponse.json({ role, accounts });
+    return NextResponse.json({ role, accounts, assistance });
   }
   if (role === "caja") {
     const date = mexicoDateString();
     const summary = computeDaySummary(db.accounts, date);
     const cut = db.dayCuts.find((c) => c.date === date) ?? null;
-    return NextResponse.json({ role, accounts: db.accounts, summary, cut });
+    return NextResponse.json({ role, accounts: db.accounts, assistance: db.assistance, summary, cut });
   }
-  return NextResponse.json({ role, accounts: db.accounts });
+  return NextResponse.json({ role, accounts: db.accounts, assistance: db.assistance });
 }
 
 // Acciones del personal sobre las cuentas. Meseros: marcar entregado y
@@ -67,6 +68,23 @@ export async function POST(req: Request) {
     const cut: DayCut = { ...summary, id: `cut-${Date.now()}`, closedAt: new Date().toISOString(), openAccountsClosed: openClosed };
     db.dayCuts.push(cut);
     return NextResponse.json({ ok: true, cut });
+  }
+
+  // Asistencia al mesero (sin accountId): el mesero marca como atendida
+  // la llamada del botón circular del comensal. El aviso se quita de su
+  // pantalla y el botón del comensal vuelve a estar disponible.
+  if (action === "attend-assistance") {
+    const callId = String(body?.callId ?? "");
+    if (!callId) return NextResponse.json({ error: "Falta la llamada" }, { status: 400 });
+    if (hasPostgres) {
+      const ok = await attendAssistance(callId);
+      if (!ok) return NextResponse.json({ error: "Llamada no encontrada o ya atendida" }, { status: 404 });
+      return NextResponse.json({ ok: true, message: "Asistencia atendida." });
+    }
+    const idx = db.assistance.findIndex((c) => c.id === callId);
+    if (idx < 0) return NextResponse.json({ error: "Llamada no encontrada o ya atendida" }, { status: 404 });
+    db.assistance.splice(idx, 1);
+    return NextResponse.json({ ok: true, message: "Asistencia atendida." });
   }
 
   const accountId = String(body?.accountId ?? "");

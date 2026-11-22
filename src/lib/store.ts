@@ -20,6 +20,9 @@ export const db = {
   // (primera vez) y solo Caja los cambia. Se guardan como hash SHA-256 con sal.
   // En producción viven en la tabla staff_pins de Postgres, no aquí.
   staffPins: {} as Record<string, string>,
+  // Llamadas de asistencia al mesero (botón circular del comensal).
+  // Solo desarrollo local; en Vercel viven en assistance_calls.
+  assistance: [] as { id: string; tableId: number; tableLabel: string; createdAt: string }[],
   nextOrderId: 1,
 };
 export function newItemId() { return `it-${Date.now()}-${db.nextOrderId++}`; }

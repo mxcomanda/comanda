@@ -46,6 +46,15 @@ CREATE TABLE IF NOT EXISTS settings (
   restaurant_slug TEXT PRIMARY KEY REFERENCES restaurants(slug),
   data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+-- Llamadas de asistencia al mesero (botón circular del comensal en /dzib):
+-- una fila por llamada, pendiente hasta que el mesero la marca atendida.
+CREATE TABLE IF NOT EXISTS assistance_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  restaurant_slug TEXT NOT NULL,
+  table_id INT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pendiente',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 INSERT INTO restaurants (slug, name, address) VALUES
   ('dzib', 'Dzib', 'Regina 54, Centro Histórico, CDMX'),
   ('tacos-la-chula', 'Tacos La Chula', 'CDMX — 8 sucursales')

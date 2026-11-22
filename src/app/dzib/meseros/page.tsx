@@ -1,15 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DZIB_TABLES } from "@/data/dzib";
 import { STATUS_LABEL } from "@/lib/types";
 import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Meseros: mapa de las 12 mesas, cuentas abiertas con sus platillos y su
-// estado, avisos de "listo para recoger" y de "cambio listo", y botones
-// para marcar entregado, avisar a cocina y cerrar la cuenta (liberar la
-// mesa para nuevos comensales; caja recibe el aviso). Las alertas se
-// retiran solas cuando el mesero entrega el platillo o se atiende la
-// cuenta. Se actualiza cada 5 s.
+// estado, avisos de "listo para recoger", de "cambio listo", de terminal y
+// de asistencia (botón circular del comensal), y botones para marcar
+// entregado, avisar a cocina, atender una asistencia y cerrar la cuenta
+// (liberar la mesa para nuevos comensales; caja recibe el aviso). Las
+// alertas se retiran solas cuando el mesero entrega el platillo o atiende
+// la cuenta o la asistencia. Se actualiza cada 5 s.
 export default function MeserosView() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
@@ -51,11 +52,17 @@ export default function MeserosView() {
   // Mesas que pidieron la cuenta con tarjeta (terminal): el mesero debe
   // llevar la terminal a la mesa de inmediato.
   const terminal = accounts.filter((a: any) => a.status === "cuenta-pedida" && a.payment?.method === "terminal");
+  // Llamadas de asistencia del botón circular del comensal, pendientes.
+  const assistance = (data?.assistance ?? []) as any[];
+  // Claves de asistencia que ya no están pendientes (el mesero las
+  // atendió): hay que retirar su banner, si era el que se veía.
+  const prevAssistanceRef = useRef<Set<string>>(new Set());
   // Alertas: vibración + bip + banner cuando un platillo queda listo
-  // para recoger, caja marca el cambio listo, o una mesa pide la cuenta
-  // con terminal (con el monto a cobrar, grande y claro). Las alertas se
-  // retiran solas cuando se atienden: al entregar el platillo, al
-  // cerrarse o pagarse la cuenta, o al quitarse el cambio listo.
+  // para recoger, caja marca el cambio listo, una mesa pide la cuenta
+  // con terminal (con el monto a cobrar, grande y claro) o una mesa pide
+  // asistencia. Las alertas se retiran solas cuando se atienden: al
+  // entregar el platillo, al cerrarse o pagarse la cuenta, al quitarse el
+  // cambio listo, o al marcar atendida la asistencia.
   useEffect(() => {
     if (!data) return;
     const all = (data.accounts ?? []) as any[];
@@ -66,11 +73,15 @@ export default function MeserosView() {
       if (!a.changeReady || a.status === "cerrada" || a.status === "pagada") out.push(`cambio:${a.id}`);
       return out;
     });
-    staffAlerts.retract([...delivered, ...resolved]);
+    const currentAssistance = assistance.map((c: any) => `asistencia:${c.id}`);
+    const goneAssistance = [...prevAssistanceRef.current].filter((k) => !currentAssistance.includes(k));
+    prevAssistanceRef.current = new Set(currentAssistance);
+    staffAlerts.retract([...delivered, ...resolved, ...goneAssistance]);
     const events: StaffEvent[] = [
       ...ready.map((i: any) => ({ key: `listo:${i.id}`, text: `¡Pedido listo para recoger! ${i.name} (${i.tableLabel})` })),
       ...changeReady.map((a: any) => ({ key: `cambio:${a.id}`, text: `¡Cambio listo en caja para ${a.tableLabel}! Lleva $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)} de cambio.` })),
       ...terminal.map((a: any) => ({ key: `terminal:${a.id}`, text: `${a.tableLabel} pidió la cuenta con terminal — lleva la terminal · Cobra $${(a.totalCents / 100).toFixed(0)}` })),
+      ...assistance.map((c: any) => ({ key: `asistencia:${c.id}`, text: `¡${c.tableLabel} necesita asistencia! Ve a la mesa.` })),
     ];
     staffAlerts.notify(events);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,6 +101,11 @@ export default function MeserosView() {
       ))}
       {terminal.map((a: any) => (
         <div className="alert gold" key={a.id}>💳 {a.tableLabel} pidió la cuenta con terminal — lleva la terminal. <b style={{ fontSize: 22 }}>Cobra: ${(a.totalCents / 100).toFixed(0)}</b></div>
+      ))}
+      {assistance.map((c: any) => (
+        <div className="alert gold" key={c.id}>🔔 ¡{c.tableLabel} necesita asistencia! Ve a la mesa.{" "}
+          <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`asistencia:${c.id}`]); void post("attend-assistance", { callId: c.id }, "Asistencia atendida."); }}>Atendido ✓</button>
+        </div>
       ))}
       <p><button onClick={load}>Actualizar</button></p>
       {msg && <p>{msg}</p>}

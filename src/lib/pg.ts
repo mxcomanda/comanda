@@ -80,6 +80,15 @@ export function ensureColumns(): Promise<void> {
       // (bebida/acompañamiento del desayuno, ingrediente extra escrito).
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS notes TEXT`;
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS detail TEXT`;
+      // Llamadas de asistencia al mesero (botón circular del comensal):
+      // una fila por llamada, pendiente hasta que el mesero la atiende.
+      await sql`CREATE TABLE IF NOT EXISTS assistance_calls (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        restaurant_slug TEXT NOT NULL,
+        table_id INT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pendiente',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
     })().catch((e) => { columnsPromise = null; throw e; });
   }
   return columnsPromise;
@@ -435,4 +444,50 @@ export async function getKitchenAlerts(): Promise<{ accountId: string; tableLabe
   await ensureColumns();
   const { rows } = await sql`SELECT id, table_id FROM accounts WHERE restaurant_slug = ${RESTAURANT} AND kitchen_alert = true AND status <> 'cerrada' ORDER BY created_at ASC`;
   return rows.map((r) => ({ accountId: String(r.id), tableLabel: tableLabel(r.table_id as number) }));
+}
+
+// ---------- Asistencia al mesero (botón circular del comensal) ----------
+export interface AssistanceCall { id: string; tableId: number; tableLabel: string; createdAt: string; }
+
+function assistanceRowToCall(r: Record<string, unknown>): AssistanceCall {
+  return {
+    id: String(r.id), tableId: r.table_id as number, tableLabel: tableLabel(r.table_id as number),
+    createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at ?? ""),
+  };
+}
+
+// El comensal pide asistencia. Si su mesa ya tiene una llamada pendiente,
+// se devuelve esa (sin duplicar): el botón queda en "Mesero en camino"
+// hasta que el mesero la atienda.
+export async function requestAssistance(tableId: number): Promise<AssistanceCall> {
+  await ensureColumns();
+  const open = await getOpenAssistanceCallForTable(tableId);
+  if (open) return open;
+  const { rows } = await sql`INSERT INTO assistance_calls (restaurant_slug, table_id, status)
+    VALUES (${RESTAURANT}, ${tableId}, 'pendiente') RETURNING id, table_id, created_at`;
+  return assistanceRowToCall(rows[0]);
+}
+
+export async function getOpenAssistanceCalls(): Promise<AssistanceCall[]> {
+  await ensureColumns();
+  const { rows } = await sql`SELECT id, table_id, created_at FROM assistance_calls
+    WHERE restaurant_slug = ${RESTAURANT} AND status = 'pendiente' ORDER BY created_at ASC`;
+  return rows.map(assistanceRowToCall);
+}
+
+export async function getOpenAssistanceCallForTable(tableId: number): Promise<AssistanceCall | null> {
+  await ensureColumns();
+  const { rows } = await sql`SELECT id, table_id, created_at FROM assistance_calls
+    WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status = 'pendiente' ORDER BY created_at DESC LIMIT 1`;
+  if (rows.length === 0) return null;
+  return assistanceRowToCall(rows[0]);
+}
+
+// El mesero marca la llamada como atendida: el aviso se quita de su
+// pantalla y el botón del comensal vuelve a estar disponible.
+export async function attendAssistance(callId: string): Promise<boolean> {
+  await ensureColumns();
+  if (!isUuid(callId)) return false;
+  const { rowCount } = await sql`UPDATE assistance_calls SET status = 'atendido' WHERE id = ${callId}::uuid AND status = 'pendiente'`;
+  return (rowCount ?? 0) > 0;
 }
