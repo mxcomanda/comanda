@@ -2,9 +2,20 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
-import { DZIB_TABLES } from "@/data/dzib";
+import { DZIB_TABLES, DZIB_BREAKFAST, DZIB_SETTINGS } from "@/data/dzib";
 import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment, setItemNotes } from "@/lib/pg";
+import { breakfastOpen, lunchOpen } from "@/lib/hours";
 import type { Account } from "@/lib/types";
+
+// Nombres de desayuno (sencillos, especiales, otras opciones y guisado
+// del día): la regla de horario se cumple en el servidor aunque el
+// cliente esté alterado. El guisado se llama igual que un 3er tiempo de
+// la hoja ("Pollo a la pibil"), así que solo cuenta como desayuno cuando
+// NO lleva tiempo (los tiempos de comida siempre llevan tiempo).
+const BREAKFAST_NAMES = new Set([
+  ...DZIB_BREAKFAST.filter((b) => b.category !== "extra").map((b) => b.name),
+  DZIB_SETTINGS.guisadoDelDia,
+]);
 
 // Estado de una cuenta (lo usa el comensal para su panel de Status y el
 // mesero). El id es un UUID, no lleva sesión de personal.
@@ -92,12 +103,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Falta mesa o platillos" }, { status: 400 });
   const table = DZIB_TABLES.find((t) => t.id === body.tableId);
   if (!table) return NextResponse.json({ error: "Mesa no válida. Pide solo con el QR de tu mesa." }, { status: 400 });
-  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: string | null }) => ({
+  const items = body.items.map((it: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: string | null; qty?: number; kind?: string | null }) => ({
     name: String(it.name), priceCents: Number(it.priceCents) || 0, tiempo: it.tiempo ?? null,
-    corrida: it.tiempo ? (Number(it.corrida) || 1) : null,
+    corrida: it.tiempo ? (Number(it.corrida) || 1) : (it.kind === "agua" ? (Number(it.corrida) || null) : null),
     notes: String(it.notes ?? "").trim() || null, detail: String(it.detail ?? "").trim() || null,
     group: it.group === "desayuno" ? "desayuno" as const : null,
+    qty: Math.max(1, Math.floor(Number(it.qty) || 1)),
+    kind: it.kind === "agua" ? "agua" as const : null,
   }));
+  // Horarios de servicio (hora de México, en el servidor): desayunos
+  // solo hasta la 1:00 pm; comida corrida solo a partir de la 1:00 pm.
+  // Lo por separado (sin tiempo y sin ser desayuno) no se bloquea.
+  const hasBreakfast = items.some((i: { tiempo: string | null; name: string }) => !i.tiempo && BREAKFAST_NAMES.has(i.name));
+  const hasCourse = items.some((i: { tiempo: string | null }) => i.tiempo);
+  if (hasBreakfast && !breakfastOpen())
+    return NextResponse.json({ error: "Los desayunos se sirven hasta la 1:00 pm. Ya no se pueden pedir desayunos." }, { status: 400 });
+  if (hasCourse && !lunchOpen())
+    return NextResponse.json({ error: "La comida corrida se sirve a partir de la 1:00 pm." }, { status: 400 });
   if (hasPostgres) {
     const account = await getOrCreateAccount(table.id);
     const updated = await addOrderItems(account.id, items);
@@ -110,9 +132,11 @@ export async function POST(req: Request) {
   }
   for (const it of items) {
     // Los tiempos del menú van en "espera": NO aparecen en cocina hasta que el
-    // comensal los pide en orden (1º, 2º, 3º) con /api/dzib/course.
+    // comensal los pide en orden (1º, 2º, 3º) con /api/dzib/course. El agua
+    // de una comida se envía con el primer tiempo que se pide: también
+    // queda en espera y llega junto con él.
     const isCourse = Boolean(it.tiempo);
-    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: 1, notes: it.notes, detail: it.detail, group: it.group });
+    account.items.push({ id: newItemId(), name: it.name, priceCents: it.priceCents, kitchen: "cocina-a", tiempo: it.tiempo, corrida: it.corrida, status: isCourse ? "espera" : "pendiente", qty: it.qty, notes: it.notes, detail: it.detail, group: it.group, kind: it.kind });
   }
   account.totalCents = accountTotal(account.items);
   return NextResponse.json({ ok: true, accountId: account.id, tableLabel: account.tableLabel, totalCents: account.totalCents });

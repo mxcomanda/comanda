@@ -25,6 +25,12 @@ export interface OrderItem {
   // ingrediente extra, el ingrediente escrito ("queso extra"). No cambia
   // el precio (ya está incluido).
   detail?: string | null;
+  // Tipo de ítem: "agua" = agua del día pedida dentro de una comida
+  // corrida (llega a cocina JUNTO con el primer tiempo que se pida de
+  // esa comida, no por separado). null = platillo normal. El agua se
+  // cobra aparte por unidad (precio × qty) AUNQUE la comida sea de 3
+  // tiempos: el menú sencillo cubre los platillos, no el agua.
+  kind?: "agua" | null;
 }
 export interface Account {
   id: string; tableId: number; tableLabel: string; items: OrderItem[];
@@ -61,13 +67,18 @@ export function menuPriceForThird(soloPriceCents: number): number {
 
 // Total de UNA comida corrida (sus 3 tiempos): si trae los 3, el precio
 // lo define el 3er tiempo; si trae menos, se suma cada uno por separado.
+// El agua de la comida (kind "agua") se suma SIEMPRE aparte por unidad,
+// porque el menú sencillo no la incluye.
 export function corridaGroupTotal(items: OrderItem[]): number {
-  const tiempos = new Set(items.filter((i) => i.tiempo && i.status !== "cancelado").map((i) => i.tiempo));
+  const water = items.filter((i) => i.kind === "agua" && i.status !== "cancelado");
+  const waterTotal = water.reduce((s, i) => s + i.priceCents * i.qty, 0);
+  const course = items.filter((i) => i.kind !== "agua");
+  const tiempos = new Set(course.filter((i) => i.tiempo && i.status !== "cancelado").map((i) => i.tiempo));
   if (tiempos.has("primero") && tiempos.has("segundo") && tiempos.has("tercero")) {
-    const third = items.find((i) => i.tiempo === "tercero");
-    return menuPriceForThird(third?.priceCents ?? 0);
+    const third = course.find((i) => i.tiempo === "tercero");
+    return menuPriceForThird(third?.priceCents ?? 0) + waterTotal;
   }
-  return items.filter((i) => i.status !== "cancelado").reduce((s, i) => s + i.priceCents * i.qty, 0);
+  return course.filter((i) => i.status !== "cancelado").reduce((s, i) => s + i.priceCents * i.qty, 0) + waterTotal;
 }
 
 export function computeTotal(items: OrderItem[]): number {

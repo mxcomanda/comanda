@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), account_id UUID REFERENCES accounts(id),
   menu_item_id INT, name TEXT NOT NULL, price_cents INT NOT NULL, qty INT DEFAULT 1,
   kitchen TEXT NOT NULL, tiempo TEXT, status TEXT DEFAULT 'pendiente',
-  corrida INT, notes TEXT, detail TEXT,
+  corrida INT, notes TEXT, detail TEXT, item_group TEXT, kind TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS staff_pins (

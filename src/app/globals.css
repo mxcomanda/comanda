@@ -131,6 +131,15 @@ button { cursor: pointer; }
 .dzib .pay-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
 .dzib .pay-row button { flex: 1; min-width: 140px; padding: 12px; font-weight: 900; }
 .dzib .pay-row button.active { background: var(--burnt); color: #fff; }
+/* Opción elegida (bebida del desayuno, agua del día): queda fija de
+   color naranja quemado con borde dorado y "✓ Elegido", para que el
+   cliente vea que sí la pidió. No cambia al tocar otra cosa: solo
+   cambia si el cliente elige otra opción o la quita. */
+.dzib button.picked, .dzib .pay-row button.picked { background: var(--burnt); color: #fff; border-color: var(--gold); box-shadow: 3px 3px 0 var(--dzib-ink); }
+/* Acordeón cerrado por horario (desayunos después de la 1:00 pm, comida
+   antes de la 1:00 pm): se ve apagado y no se puede abrir. */
+.dzib .accordion.disabled { opacity: .6; }
+.dzib .accordion.disabled .accordion-head { cursor: not-allowed; }
 .dzib .cash-quick button { margin: 4px 6px 4px 0; }
 .dzib .price-first { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--burnt); margin-right: 8px; }
 

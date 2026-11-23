@@ -82,6 +82,9 @@ export function ensureColumns(): Promise<void> {
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS detail TEXT`;
       // Grupo de lo pedido por separado: "desayuno" o NULL (por separado).
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS item_group TEXT`;
+      // Tipo de ítem: "agua" = agua del día dentro de una comida corrida
+      // (llega a cocina junto con el primer tiempo de esa comida).
+      await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS kind TEXT`;
       // Llamadas de asistencia al mesero (botón circular del comensal):
       // una fila por llamada, pendiente hasta que el mesero la atiende.
       await sql`CREATE TABLE IF NOT EXISTS assistance_calls (
@@ -128,7 +131,7 @@ export async function getAccountWithItems(accountId: string): Promise<Account | 
 
 async function getItems(accountId: string): Promise<OrderItem[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group FROM order_items WHERE account_id = ${accountId}::uuid ORDER BY created_at ASC`;
+  const { rows } = await sql`SELECT id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group, kind FROM order_items WHERE account_id = ${accountId}::uuid ORDER BY created_at ASC`;
   return rows.map((r) => ({
     id: String(r.id), name: r.name as string, priceCents: r.price_cents as number,
     kitchen: r.kitchen as string, tiempo: (r.tiempo as OrderItem["tiempo"]) ?? null,
@@ -136,6 +139,7 @@ async function getItems(accountId: string): Promise<OrderItem[]> {
     corrida: (r.corrida as number | null) ?? null,
     notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
     group: (r.item_group as "desayuno" | null) ?? null,
+    kind: (r.kind as "agua" | null) ?? null,
   }));
 }
 
@@ -170,12 +174,16 @@ export async function getOpenAccountByTable(tableId: number): Promise<Account | 
   return rowToAccount(rows[0], await getItems(String(rows[0].id)));
 }
 
-export async function addOrderItems(accountId: string, items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: "desayuno" | null }[]): Promise<Account> {
+export async function addOrderItems(accountId: string, items: { name: string; priceCents: number; tiempo?: string | null; corrida?: number | null; notes?: string | null; detail?: string | null; group?: "desayuno" | null; qty?: number; kind?: "agua" | null }[]): Promise<Account> {
   await ensureColumns();
   for (const it of items) {
     const isCourse = Boolean(it.tiempo);
-    await sql`INSERT INTO order_items (account_id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group)
-      VALUES (${accountId}::uuid, ${String(it.name)}, ${Number(it.priceCents) || 0}, 'cocina-a', ${it.tiempo ?? null}, ${isCourse ? "espera" : "pendiente"}, 1, ${it.corrida ?? null}, ${it.notes?.trim() ? it.notes.trim().slice(0, 200) : null}, ${it.detail?.trim() ? it.detail.trim().slice(0, 200) : null}, ${it.group ?? null})`;
+    // El agua de una comida se envía CON tiempo (el primer tiempo que
+    // se pide de esa comida): queda en espera como un tiempo y llega a
+    // cocina junto con él. El agua por separado o agregada a una comida
+    // ya pedida no lleva tiempo y va directo a cocina.
+    await sql`INSERT INTO order_items (account_id, name, price_cents, kitchen, tiempo, status, qty, corrida, notes, detail, item_group, kind)
+      VALUES (${accountId}::uuid, ${String(it.name)}, ${Number(it.priceCents) || 0}, 'cocina-a', ${it.tiempo ?? null}, ${isCourse ? "espera" : "pendiente"}, ${Math.max(1, Math.floor(Number(it.qty) || 1))}, ${it.corrida ?? null}, ${it.notes?.trim() ? it.notes.trim().slice(0, 200) : null}, ${it.detail?.trim() ? it.detail.trim().slice(0, 200) : null}, ${it.group ?? null}, ${it.kind === "agua" ? "agua" : null})`;
   }
   const acc = await getAccountWithItems(accountId);
   if (!acc) throw new Error("Cuenta no encontrada tras crear el pedido");
@@ -226,7 +234,7 @@ export async function requestCourse(accountId: string, tiempo: string, corrida?:
 
 export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { table: string; accountId: string })[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.account_id, a.table_id
+  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.kind, oi.account_id, a.table_id
     FROM order_items oi JOIN accounts a ON a.id = oi.account_id
     WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status <> 'espera' AND oi.status <> 'cancelado'
     AND a.status IN ('abierta', 'cuenta-pedida')
@@ -238,6 +246,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
     corrida: (r.corrida as number | null) ?? null,
     notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
     group: (r.item_group as "desayuno" | null) ?? null,
+    kind: (r.kind as "agua" | null) ?? null,
     table: tableLabel(r.table_id as number), accountId: String(r.account_id),
   }));
 }
@@ -252,7 +261,7 @@ export async function getKitchenItems(kitchen: string): Promise<(OrderItem & { t
 // ("Próximos tiempos"), sin botones de avance.
 export async function getWaitingNotes(): Promise<(OrderItem & { table: string; accountId: string })[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.account_id, a.table_id
+  const { rows } = await sql`SELECT oi.id, oi.name, oi.price_cents, oi.kitchen, oi.tiempo, oi.status, oi.qty, oi.corrida, oi.notes, oi.detail, oi.item_group, oi.kind, oi.account_id, a.table_id
     FROM order_items oi JOIN accounts a ON a.id = oi.account_id
     WHERE a.restaurant_slug = ${RESTAURANT} AND oi.status = 'espera' AND oi.notes IS NOT NULL AND oi.notes <> ''
     AND a.status IN ('abierta', 'cuenta-pedida')
@@ -264,6 +273,7 @@ export async function getWaitingNotes(): Promise<(OrderItem & { table: string; a
     corrida: (r.corrida as number | null) ?? null,
     notes: (r.notes as string | null) ?? null, detail: (r.detail as string | null) ?? null,
     group: (r.item_group as "desayuno" | null) ?? null,
+    kind: (r.kind as "agua" | null) ?? null,
     table: tableLabel(r.table_id as number), accountId: String(r.account_id),
   }));
 }

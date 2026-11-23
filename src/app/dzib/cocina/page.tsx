@@ -66,9 +66,12 @@ export default function CocinaView() {
   const byTable: Record<string, any[]> = {};
   for (const i of items) {
     // Cada comida se ve por separado: "Mesa 3 · Comida 1", "Mesa 3 ·
-    // Comida 2". Los desayunos van aparte ("Desayunos") y lo por
+    // Comida 2". El agua de una comida va con su comida (aunque no tenga
+    // tiempo propio). Los desayunos van aparte ("Desayunos") y lo por
     // separado, aparte.
-    const key = i.tiempo ? `${i.table} · Comida ${i.corrida ?? 1}` : `${i.table} · ${i.group === "desayuno" ? "Desayunos" : "Por separado"}`;
+    const key = i.tiempo || (i.kind === "agua" && i.corrida)
+      ? `${i.table} · Comida ${i.corrida ?? 1}`
+      : `${i.table} · ${i.group === "desayuno" ? "Desayunos" : "Por separado"}`;
     (byTable[key] ??= []).push(i);
   }
   return (
@@ -97,7 +100,7 @@ export default function CocinaView() {
           <b>{table}</b>
           {list.map((i: any) => (
             <div className="item" key={i.id}>
-              <div><b>{i.name}</b>{i.detail && <div className="detail-line">{i.detail}</div>}<div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo} · Comida ${i.corrida ?? 1}` : (i.group === "desayuno" ? "Desayunos" : "Por separado")} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div>{i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}</div>
+              <div><b>{i.name}{i.qty > 1 ? ` ×${i.qty}` : ""}</b>{i.detail && <div className="detail-line">{i.detail}</div>}<div className="muted">{i.tiempo ? `Tiempo: ${i.tiempo} · Comida ${i.corrida ?? 1}` : (i.kind === "agua" && i.corrida ? `Comida ${i.corrida} · Llega con el primer tiempo` : (i.group === "desayuno" ? "Desayunos" : "Por separado"))} · {STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div>{i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}</div>
               <span>
                 {NEXT_LABEL[i.status] ? (
                   <button type="button" className="staff-btn" onClick={() => advance(i.id)}>{NEXT_LABEL[i.status]}</button>

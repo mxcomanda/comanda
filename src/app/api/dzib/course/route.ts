@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, accountTotal } from "@/lib/store";
 import { hasPostgres, getAccountWithItems, requestCourse } from "@/lib/pg";
+import { lunchOpen } from "@/lib/hours";
 
 const ORDER = ["primero", "segundo", "tercero"] as const;
 
@@ -8,6 +9,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const tiempo = body?.tiempo as (typeof ORDER)[number];
   if (!ORDER.includes(tiempo)) return NextResponse.json({ error: "Tiempo no válido" }, { status: 400 });
+  // La comida corrida se sirve a partir de la 1:00 pm (hora de México).
+  // Aunque la corrida se haya armado antes, no se puede pedir ningún
+  // tiempo antes de la 1:00 pm.
+  if (!lunchOpen()) return NextResponse.json({ error: "La comida corrida se sirve a partir de la 1:00 pm." }, { status: 400 });
   // Corrida que se está pidiendo (1, 2…); cada corrida avanza a su ritmo.
   const corrida = Number(body?.corrida) || 1;
   // Indicación especial que el comensal escribió para este tiempo y que
