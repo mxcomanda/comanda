@@ -157,6 +157,21 @@ export async function POST(req: Request) {
     if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
     return NextResponse.json({ ok: true, account: acc });
   }
+  // Cierre por Caja: cierra la cuenta sin marcarla como liberada por el
+  // mesero. La acción "close" es solo del mesero (liberar mesa); antes,
+  // con la sesión multi-rol, el cierre de Caja caía en la rama del
+  // mesero y la cuenta quedaba marcada como liberada por él.
+  if (action === "close-caja") {
+    const acc = hasPostgres ? await setAccountStatus(accountId, "cerrada") : null;
+    if (!hasPostgres) {
+      const a = db.accounts.find((x) => x.id === accountId);
+      if (!a) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+      a.status = "cerrada";
+      return NextResponse.json({ ok: true, account: a });
+    }
+    if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    return NextResponse.json({ ok: true, account: acc });
+  }
   if (action === "close") {
     const acc = hasPostgres ? await setAccountStatus(accountId, "cerrada") : null;
     if (!hasPostgres) {

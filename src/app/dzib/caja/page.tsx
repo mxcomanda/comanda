@@ -96,7 +96,7 @@ export default function CajaView() {
                 <button type="button" className="staff-btn" onClick={() => post("change-ready", { accountId: a.id, ready: !a.changeReady })}>{a.changeReady ? "Quitar cambio listo" : "Marcar cambio listo"}</button>
               )}
               {a.status !== "cerrada" && (
-                <button type="button" className="staff-btn" onClick={() => post("close", { accountId: a.id })}>Cerrar cuenta</button>
+                <button type="button" className="staff-btn" onClick={() => post("close-caja", { accountId: a.id })}>Cerrar cuenta</button>
               )}
             </p>
           </div>

@@ -262,10 +262,16 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
 
   // Pagar aparece cuando todo lo elegido ya se pidió: cada corrida con
   // platillos tiene sus tiempos pedidos y no quedan extras sin enviar.
+  // OJO: lo "por separado" ya enviado se lee de la CUENTA (sentExtras),
+  // no solo del estado local extrasSent: al volver a abrir con el QR,
+  // recargar la página o cambiar de dispositivo, extrasSent se pierde
+  // (empieza en false) y el comensal nunca veía el botón de Pagar — la
+  // cuenta nunca llegaba a "cuenta-pedida" y Caja no podía confirmar el
+  // pago. La cuenta (Postgres) es la fuente de verdad, no el navegador.
   const corridasWithDishes = allCorridaIds.filter((id) => selectedTiempos(id).length > 0);
   const allCorridasRequested = corridasWithDishes.every((id) => selectedTiempos(id).every((t) => requested(t, id)));
   const showPay = Boolean(accountId) && account?.status === "abierta" && extras.length === 0 &&
-    (corridasWithDishes.length > 0 ? allCorridasRequested : extrasSent);
+    (corridasWithDishes.length > 0 ? allCorridasRequested : (extrasSent || sentExtras.length > 0));
 
   // ---- Acciones ----
   // group: "desayuno" = desayuno (sencillo, especial, guisado, otra
