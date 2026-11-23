@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { hashPin, isValidPinFormat, signSession, verifySession } from "@/lib/auth";
+import { hashPin, isValidPinFormat, signSession, verifySession, verifySessionRoles, SESSION_MAX_AGE_SECS } from "@/lib/auth";
 import { db } from "@/lib/store";
 import { hasPostgres, getStaffPins, setStaffPins } from "@/lib/pg";
 
@@ -24,7 +24,11 @@ export async function POST(req: Request) {
     const role = (Object.keys(pins) as Role[]).find((r) => pins[r] === hashPin(pin));
     if (!role) return NextResponse.json({ error: "Clave incorrecta" }, { status: 401 });
     const res = NextResponse.json({ ok: true, role });
-    res.cookies.set("comanda_staff", signSession("dzib", role), { httpOnly: true, path: "/", maxAge: 12 * 60 * 60, sameSite: "lax" });
+    // Sesión multi-rol: el login AGREGA este rol a la sesión que ya había
+    // en el navegador (no la reemplaza), así entrar como Meseros no cierra
+    // Cocina ni Caja. Cookie persistente de 1 año, renovada en cada login.
+    const existing = req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1];
+    res.cookies.set("comanda_staff", signSession("dzib", role, existing), { httpOnly: true, path: "/", maxAge: SESSION_MAX_AGE_SECS, sameSite: "lax" });
     return res;
   }
   if (body?.action === "setup") {
@@ -48,7 +52,8 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const roles = verifySessionRoles(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
   const role = verifySession(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
   const pins = await readPins();
-  return NextResponse.json({ configured: { caja: Boolean(pins.caja), cocina: Boolean(pins.cocina), mesero: Boolean(pins.mesero) }, yourRole: role });
+  return NextResponse.json({ configured: { caja: Boolean(pins.caja), cocina: Boolean(pins.cocina), mesero: Boolean(pins.mesero) }, yourRole: role, roles });
 }

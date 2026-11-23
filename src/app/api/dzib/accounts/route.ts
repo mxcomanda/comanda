@@ -1,42 +1,45 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { verifySession } from "@/lib/auth";
+import { verifySessionRoles, type Role } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
 import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountByMesero, setChangeReady, setKitchenAlert, getDayData, saveDayCut, getOpenAssistanceCalls, attendAssistance } from "@/lib/pg";
 import { computeDaySummary, mexicoDateString, type DayCut } from "@/lib/daySummary";
 
-function roleOf(req: Request) {
-  return verifySession(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
+function roleOf(req: Request): Role[] {
+  return verifySessionRoles(req.headers.get("cookie")?.match(/comanda_staff=([^;]+)/)?.[1], "dzib");
 }
 
 export async function GET(req: Request) {
-  const role = roleOf(req);
-  if (role !== "mesero" && role !== "caja")
+  const roles = roleOf(req);
+  // roles viene en orden canónico (caja, cocina, mesero): roles[0] es el principal.
+  const role = roles[0] ?? null;
+  if (!roles.includes("mesero") && !roles.includes("caja"))
     return NextResponse.json({ error: "Tu rol no tiene acceso a Meseros / cuentas" }, { status: 403 });
   if (hasPostgres) {
     const accounts = await getAllAccounts();
     const assistance = await getOpenAssistanceCalls();
     if (role === "caja") {
       const { summary, cut } = await getDayData();
-      return NextResponse.json({ role, accounts, assistance, summary, cut });
+      return NextResponse.json({ role, roles, accounts, assistance, summary, cut });
     }
-    return NextResponse.json({ role, accounts, assistance });
+    return NextResponse.json({ role, roles, accounts, assistance });
   }
   if (role === "caja") {
     const date = mexicoDateString();
     const summary = computeDaySummary(db.accounts, date);
     const cut = db.dayCuts.find((c) => c.date === date) ?? null;
-    return NextResponse.json({ role, accounts: db.accounts, assistance: db.assistance, summary, cut });
+    return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance, summary, cut });
   }
-  return NextResponse.json({ role, accounts: db.accounts, assistance: db.assistance });
+  return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance });
 }
 
 // Acciones del personal sobre las cuentas. Meseros: marcar entregado y
 // avisar a cocina. Caja: confirmar pago, marcar cambio listo, cerrar cuenta.
 export async function POST(req: Request) {
-  const role = roleOf(req);
-  if (role !== "mesero" && role !== "caja")
+  const roles = roleOf(req);
+  const role = roles[0] ?? null;
+  if (!roles.includes("mesero") && !roles.includes("caja"))
     return NextResponse.json({ error: "Tu rol no tiene acceso a Meseros / cuentas" }, { status: 403 });
   const body = await req.json().catch(() => null);
   const action = body?.action as string;
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
   // cierra las cuentas abiertas del día, marca el día como cortado y
   // guarda el corte con fecha, hora y totales.
   if (action === "corte") {
-    if (role !== "caja") return NextResponse.json({ error: "Solo Caja puede hacer el corte" }, { status: 403 });
+    if (!roles.includes("caja")) return NextResponse.json({ error: "Solo Caja puede hacer el corte" }, { status: 403 });
     if (hasPostgres) {
       const res = await saveDayCut();
       if ("error" in res) return NextResponse.json({ error: res.error, cut: res.cut ?? null }, { status: 400 });
@@ -116,7 +119,7 @@ export async function POST(req: Request) {
   // caja recibe el aviso (closedByMesero). Si hay platillos sin entregar
   // o la cuenta no está pagada, el cliente pide confirmación antes de
   // llamar aquí; el servidor no bloquea el cierre, solo lo registra.
-  if (action === "close" && role === "mesero") {
+  if (action === "close" && roles.includes("mesero")) {
     if (hasPostgres) {
       const acc = await closeAccountByMesero(accountId);
       if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
@@ -130,7 +133,7 @@ export async function POST(req: Request) {
   }
 
   // Solo Caja a partir de aquí.
-  if (role !== "caja") return NextResponse.json({ error: "Solo Caja puede hacer eso" }, { status: 403 });
+  if (!roles.includes("caja")) return NextResponse.json({ error: "Solo Caja puede hacer eso" }, { status: 403 });
   if (action === "confirm-pay") {
     const acc = hasPostgres ? await setAccountStatus(accountId, "pagada") : null;
     if (!hasPostgres) {
