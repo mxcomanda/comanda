@@ -2,20 +2,10 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
-import { DZIB_TABLES, DZIB_BREAKFAST, DZIB_SETTINGS } from "@/data/dzib";
+import { DZIB_TABLES } from "@/data/dzib";
 import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment, setItemNotes } from "@/lib/pg";
-import { breakfastOpen, lunchOpen } from "@/lib/hours";
+import { lunchOpen } from "@/lib/hours";
 import type { Account } from "@/lib/types";
-
-// Nombres de desayuno (sencillos, especiales, otras opciones y guisado
-// del día): la regla de horario se cumple en el servidor aunque el
-// cliente esté alterado. El guisado se llama igual que un 3er tiempo de
-// la hoja ("Pollo a la pibil"), así que solo cuenta como desayuno cuando
-// NO lleva tiempo (los tiempos de comida siempre llevan tiempo).
-const BREAKFAST_NAMES = new Set([
-  ...DZIB_BREAKFAST.filter((b) => b.category !== "extra").map((b) => b.name),
-  DZIB_SETTINGS.guisadoDelDia,
-]);
 
 // Estado de una cuenta (lo usa el comensal para su panel de Status y el
 // mesero). El id es un UUID, no lleva sesión de personal.
@@ -111,13 +101,11 @@ export async function POST(req: Request) {
     qty: Math.max(1, Math.floor(Number(it.qty) || 1)),
     kind: it.kind === "agua" ? "agua" as const : null,
   }));
-  // Horarios de servicio (hora de México, en el servidor): desayunos
-  // solo hasta la 1:00 pm; comida corrida solo a partir de la 1:00 pm.
-  // Lo por separado (sin tiempo y sin ser desayuno) no se bloquea.
-  const hasBreakfast = items.some((i: { tiempo: string | null; name: string }) => !i.tiempo && BREAKFAST_NAMES.has(i.name));
+  // Horarios de servicio (hora de México, en el servidor): los
+  // desayunos ya no tienen límite de horario (todo el día, por
+  // decisión del dueño); la comida corrida solo a partir de la 1:00 pm.
+  // Lo por separado (sin tiempo) no se bloquea.
   const hasCourse = items.some((i: { tiempo: string | null }) => i.tiempo);
-  if (hasBreakfast && !breakfastOpen())
-    return NextResponse.json({ error: "Los desayunos se sirven hasta la 1:00 pm. Ya no se pueden pedir desayunos." }, { status: 400 });
   if (hasCourse && !lunchOpen())
     return NextResponse.json({ error: "La comida corrida se sirve a partir de la 1:00 pm." }, { status: 400 });
   if (hasPostgres) {

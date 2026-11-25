@@ -1,5 +1,5 @@
 // /dzib — vista del comensal. Acceso solo por QR de mesa (?mesa=N).
-// Submenús desplegables: Desayunos (hasta la 1:00 pm), Menú de comida
+// Submenús desplegables: Desayunos (todo el día, sin horario), Menú de comida
 // del día (a partir de la 1:00 pm, por tiempos) y Pedir por separado
 // (sin horario). Horarios en hora de Ciudad de México. El agua del día
 // pedida dentro de una comida llega a cocina JUNTO con el primer tiempo
@@ -16,7 +16,7 @@
 import { useEffect, useState } from "react";
 import { DZIB_BREAKFAST, DZIB_DAILY_MENU_TODAY, DZIB_SETTINGS, DZIB_TABLES } from "@/data/dzib";
 import { mxn, STATUS_LABEL, menuPriceForThird } from "@/lib/types";
-import { breakfastOpen, lunchOpen, mexicoHour } from "@/lib/hours";
+import { lunchOpen, mexicoHour } from "@/lib/hours";
 
 const MENU = DZIB_DAILY_MENU_TODAY;
 const TIEMPOS = ["primero", "segundo", "tercero"] as const;
@@ -63,12 +63,12 @@ function SubAcc({ title, open, onToggle, children }: { title: string; open: bool
 export default function DzibPage({ searchParams }: { searchParams: { mesa?: string } }) {
   const mesa = Number(searchParams?.mesa);
   const table = DZIB_TABLES.find((t) => t.id === mesa);
-  // Horarios de servicio (hora de Ciudad de México): desayunos hasta la
-  // 1:00 pm, comida corrida a partir de la 1:00 pm. Se recalcula cada
-  // minuto para que la pantalla cambie sola al llegar la 1:00 pm.
+  // Horarios de servicio (hora de Ciudad de México): desayunos todo
+  // el día (sin horario) y comida corrida a partir de la 1:00 pm. Se
+  // recalcula cada minuto para que la pantalla cambie sola al llegar
+  // la 1:00 pm.
   const [, setTimeTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTimeTick((n) => n + 1), 60000); return () => clearInterval(t); }, []);
-  const bOpen = breakfastOpen();
   const lOpen = lunchOpen();
   const [openSection, setOpenSection] = useState<"desayunos" | "comida" | "separado" | null>(() => {
     return mexicoHour() < 13 ? "desayunos" : "comida";
@@ -279,7 +279,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // comida (plato suelto, agua). El grupo viaja al servidor para que el
   // desayuno se etiquete "Desayunos" y no "por separado".
   function addExtra(name: string, priceCents: number, detail?: string, group: "desayuno" | "separado" = "separado", qty: number = 1) {
-    if (group === "desayuno" && !bOpen) { setMsg("Los desayunos se sirven hasta la 1:00 pm. Ya no se pueden pedir desayunos."); return; }
     setExtras((prev) => [...prev, { key: `x-${Date.now()}-${prev.length}`, name, priceCents, detail, group, qty }]);
   }
   // Agua por separado: cada vez que se presiona el botón se suma una
@@ -333,7 +332,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // Agregar un desayuno sencillo con su bebida y acompañamiento elegidos
   // (incluidos en el $82, sin costo extra).
   function addBreakfast(item: any) {
-    if (!bOpen) { setMsg("Los desayunos se sirven hasta la 1:00 pm. Ya no se pueden pedir desayunos."); return; }
     const pick = breakfastPick;
     const detail = pick && pick.id === item.id ? `${pick.drink} · ${pick.side}` : "Café de olla · Jugo de naranja";
     addExtra(item.name, item.priceCents, detail, "desayuno");
@@ -409,7 +407,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   }
   async function sendExtras() {
     if (extras.length === 0) { setMsg("Agrega algo por separado primero."); return; }
-    if (!bOpen && extras.some((e) => e.group === "desayuno")) { setMsg("Los desayunos se sirven hasta la 1:00 pm. Ya no se pueden pedir desayunos."); return; }
     const items = extras.map((e) => ({ name: e.name, priceCents: e.priceCents, tiempo: null, corrida: null, notes: e.notes?.trim() || null, detail: e.detail || null, group: e.group === "desayuno" ? "desayuno" as const : null, qty: e.qty ?? 1 }));
     const id = accountId ? accountId : await sendOrder(items);
     if (!id) return;
@@ -604,7 +601,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         )}
 
         {/* ---------- DESAYUNOS ---------- */}
-        <Accordion title="Desayunos" sub={bOpen ? "Hasta la 1:00 pm" : "Cerrado · Los desayunos se sirven hasta la 1:00 pm"} open={openSection === "desayunos"} onToggle={() => setOpenSection(openSection === "desayunos" ? null : "desayunos")} disabled={!bOpen}>
+        <Accordion title="Desayunos" sub="Todo el día" open={openSection === "desayunos"} onToggle={() => setOpenSection(openSection === "desayunos" ? null : "desayunos")}>
           {/* El guisado del día ($78) también incluye café/té y jugo/fruta,
               igual que los sencillos: se agrega con el mismo selector. */}
           {breakfastItemRow({ id: "guisado", name: DZIB_SETTINGS.guisadoDelDia, description: "Guisado de hoy", priceCents: DZIB_SETTINGS.guisadoPriceCents, category: "desayuno" })}
@@ -697,13 +694,9 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         {/* ---------- PEDIR POR SEPARADO ---------- */}
         <Accordion title="Pedir por separado" sub="A la carta · precio individual" open={openSection === "separado"} onToggle={() => setOpenSection(openSection === "separado" ? null : "separado")}>
           <p className="muted">Cualquier platillo por su precio individual, fuera del menú sencillo. Se envía directo a cocina.</p>
-          {bOpen ? (
-            <SubAcc title="Desayunos" open={openBreakfast === "sep-des"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-des" ? null : "sep-des")}>
-              {DZIB_BREAKFAST.filter((i) => i.category !== "extra").map((i) => breakfastItemRow(i))}
-            </SubAcc>
-          ) : (
-            <p className="muted">Los desayunos se sirven hasta la 1:00 pm.</p>
-          )}
+          <SubAcc title="Desayunos" open={openBreakfast === "sep-des"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-des" ? null : "sep-des")}>
+            {DZIB_BREAKFAST.filter((i) => i.category !== "extra").map((i) => breakfastItemRow(i))}
+          </SubAcc>
           <SubAcc title="Comida suelta — por tiempo" open={openBreakfast === "sep-comida"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-comida" ? null : "sep-comida")}>
             {MENU.items.map((i) => (
               <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">{TIEMPO_LABEL[i.tiempo as Tiempo]}</div></div><span>{i.soloPriceCents === 0 ? "En menú sencillo" : mxn(i.soloPriceCents)} {i.soloPriceCents > 0 ? addBtn(i.name, i.soloPriceCents) : null}</span></div>
