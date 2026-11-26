@@ -26,7 +26,7 @@ export default function Home() {
               WhatsApp
             </a>
           </div>
-          <p className="note">Restaurantes en Comanda: <a href="/dzib">Dzib</a> · <a href="/tacos-la-chula">Tacos La Chula</a></p>
+          <p className="note">Restaurantes en Comanda: <a href="/dzib">Dzib</a> · <a href="/tacos-la-chula">Tacos La Chula</a> · <a href="/cocuyos">Taquería Los Cocuyos</a></p>
         </div>
       </main>
       <div className="checker" aria-hidden="true" />

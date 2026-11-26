@@ -258,3 +258,42 @@ button { cursor: pointer; }
 /* ---------- Botón circular fijo "Asistencia mesero" (comensal) ---------- */
 .dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 96px; height: 96px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 4px 4px 0 var(--dzib-ink); font-weight: 900; font-size: 13px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; }
 .dzib .fab-waiter:disabled { background: #2e7d32; color: #fff; }
+
+/* ---------- Los Cocuyos (rojo #D5001C, negro, dorado #FFC400, crema) ---------- */
+/* Reutiliza todo el layout de Dzib (envoltorio "dzib cocuyos"): aquí
+   solo se cambian los colores y se añaden los detalles propios de la
+   taquería (tarjetas de camino, interruptor de idioma, encabezado
+   rojo con el logo). */
+.cocuyos { --cocuyos-red: #d5001c; --cocuyos-red-dark: #a30015; --cocuyos-gold: #ffc400; --cocuyos-cream: #fff8e7; }
+.cocuyos.dzib { background: var(--cocuyos-cream); }
+.cocuyos .dzib-header { background: var(--cocuyos-red-dark); border-bottom: 4px solid var(--cocuyos-gold); }
+.cocuyos .dzib-brand { color: #fff; text-shadow: 3px 3px 0 var(--cocuyos-red); letter-spacing: .06em; }
+.cocuyos .dzib-sub { color: var(--cocuyos-gold); }
+.cocuyos h2 { border-bottom-color: var(--cocuyos-red); color: var(--cocuyos-red-dark); }
+.cocuyos h3 { color: var(--cocuyos-red); }
+.cocuyos .badge { background: var(--cocuyos-red); }
+.cocuyos .card { background: #fff; }
+.cocuyos .big-btn, .cocuyos.dzib .big-btn { background: var(--cocuyos-red); }
+.cocuyos .big-btn.green, .cocuyos.dzib .big-btn.green { background: #2e7d32; }
+.cocuyos .dzib .accordion-head, .cocuyos.dzib .accordion-head { background: var(--cocuyos-red-dark); }
+.cocuyos .dzib .accordion-head .chev, .cocuyos.dzib .accordion-head .chev { color: var(--cocuyos-gold); }
+.cocuyos .dzib .sub-acc, .cocuyos.dzib .sub-acc { border-color: var(--cocuyos-gold); }
+.cocuyos .dzib .pay-row button.active, .cocuyos.dzib .pay-row button.active { background: var(--cocuyos-red); }
+.cocuyos .dzib button.picked, .cocuyos.dzib button.picked, .cocuyos.dzib .pay-row button.picked { background: var(--cocuyos-red); border-color: var(--cocuyos-gold); }
+.cocuyos .dzib .pick.selected, .cocuyos.dzib .pick.selected { background: #ffe3e3; }
+.cocuyos .dzib .pick .sel-tag, .cocuyos.dzib .pick .sel-tag { color: var(--cocuyos-red); }
+.cocuyos .dzib .price-first, .cocuyos.dzib .price-first { color: var(--cocuyos-red); }
+.cocuyos .dzib .btn-red, .cocuyos.dzib .btn-red { background: var(--cocuyos-red); }
+.cocuyos .dzib .corrida-tabs button.active, .cocuyos.dzib .corrida-tabs button.active { background: var(--cocuyos-red); }
+.cocuyos .pedido-aside-total { color: var(--cocuyos-red); }
+.cocuyos .detail-line { color: var(--cocuyos-red); }
+/* Tarjetas grandes de los 3 caminos (comer / tomar / postres). */
+.cocuyos .path-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 16px; border: 3px solid var(--dzib-ink); border-radius: 16px; background: #fff; box-shadow: 5px 5px 0 var(--dzib-ink); cursor: pointer; text-align: center; }
+.cocuyos .path-card:active { transform: translate(4px, 4px); box-shadow: 1px 1px 0 var(--dzib-ink); }
+.cocuyos .path-icon { font-size: 44px; line-height: 1; }
+.cocuyos .path-title { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--cocuyos-red-dark); }
+.cocuyos .path-sub { font-size: 14px; color: #555; }
+/* Interruptor de idioma ES | EN en el encabezado. */
+.cocuyos .lang-toggle { display: flex; border: 3px solid var(--cocuyos-gold); border-radius: 999px; overflow: hidden; }
+.cocuyos .lang-toggle button { border: 0; border-radius: 0; background: transparent; color: #ffe9a8; font-weight: 900; padding: 8px 16px; }
+.cocuyos .lang-toggle button.active { background: var(--cocuyos-gold); color: var(--dzib-ink); }

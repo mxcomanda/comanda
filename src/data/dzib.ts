@@ -179,4 +179,11 @@ export const RESTAURANTS = [
     description: "Taquería 24 horas, tortillas hechas a mano. Carta de 74 platillos.",
     status: "por-cargar" as const,
   },
+  {
+    slug: "cocuyos",
+    name: "Taquería Los Cocuyos",
+    address: "CDMX",
+    description: "Taquería desde 1990. Bib Gourmand — Guía Michelin. Tacos, gringas, tortas, alambres y coctelería.",
+    status: "listo" as const,
+  },
 ];

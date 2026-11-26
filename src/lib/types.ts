@@ -25,6 +25,9 @@ export interface OrderItem {
   // ingrediente extra, el ingrediente escrito ("queso extra"). No cambia
   // el precio (ya está incluido).
   detail?: string | null;
+  // Estación que prepara el ítem (solo Cocuyos: "cocina" = comida,
+  // "barra" = bebidas). Dzib no usa este campo.
+  station?: "cocina" | "barra" | null;
   // Tipo de ítem: "agua" = agua del día pedida dentro de una comida
   // corrida (llega a cocina JUNTO con el primer tiempo que se pida de
   // esa comida, no por separado). null = platillo normal. El agua se

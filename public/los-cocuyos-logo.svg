@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Taquería Los Cocuyos — desde 1990">
+  <defs>
+    <path id="arc-top" d="M 120 120 m -88 0 a 88 88 0 1 1 176 0 a 88 88 0 1 1 -176 0" fill="none"/>
+    <path id="arc-top-text" d="M 38 120 A 82 82 0 0 1 202 120" fill="none"/>
+  </defs>
+  <!-- Disco exterior -->
+  <circle cx="120" cy="120" r="116" fill="#111111"/>
+  <circle cx="120" cy="120" r="116" fill="none" stroke="#FFC400" stroke-width="5"/>
+  <circle cx="120" cy="120" r="102" fill="#FFF8E7"/>
+  <circle cx="120" cy="120" r="102" fill="none" stroke="#D5001C" stroke-width="3"/>
+  <!-- TAQUERIA en arco -->
+  <text font-family="Arial Black, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="6" fill="#111111" text-anchor="middle">
+    <textPath href="#arc-top-text" startOffset="50%">TAQUERIA</textPath>
+  </text>
+  <!-- 5 estrellas doradas -->
+  <g fill="#FFC400" stroke="#111111" stroke-width="1.5">
+    <path d="M120 62 l4.6 9.3 10.3 1.5 -7.4 7.3 1.7 10.2 -9.2 -4.8 -9.2 4.8 1.7 -10.2 -7.4 -7.3 10.3 -1.5 z"/>
+    <path d="M76 82 l3.7 7.5 8.3 1.2 -6 5.8 1.4 8.2 -7.4 -3.9 -7.4 3.9 1.4 -8.2 -6 -5.8 8.3 -1.2 z"/>
+    <path d="M164 82 l3.7 7.5 8.3 1.2 -6 5.8 1.4 8.2 -7.4 -3.9 -7.4 3.9 1.4 -8.2 -6 -5.8 8.3 -1.2 z"/>
+    <path d="M92 108 l3.7 7.5 8.3 1.2 -6 5.8 1.4 8.2 -7.4 -3.9 -7.4 3.9 1.4 -8.2 -6 -5.8 8.3 -1.2 z"/>
+    <path d="M148 108 l3.7 7.5 8.3 1.2 -6 5.8 1.4 8.2 -7.4 -3.9 -7.4 3.9 1.4 -8.2 -6 -5.8 8.3 -1.2 z"/>
+  </g>
+  <!-- Listón rojo -->
+  <g>
+    <path d="M18 138 L42 128 L42 168 L18 158 Z" fill="#A30015"/>
+    <path d="M222 138 L198 128 L198 168 L222 158 Z" fill="#A30015"/>
+    <path d="M36 126 L204 126 L204 170 L36 170 Z" fill="#D5001C" stroke="#111111" stroke-width="2.5"/>
+    <path d="M36 126 L48 148 L36 170 Z" fill="#A30015"/>
+    <path d="M204 126 L192 148 L204 170 Z" fill="#A30015"/>
+    <text x="120" y="158" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="1" fill="#FFF8E7">LOS COCUYOS</text>
+  </g>
+  <!-- Desde 1990 -->
+  <text x="120" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="800" letter-spacing="3" fill="#111111">DESDE 1990</text>
+  <text x="120" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="800" letter-spacing="3" fill="none" stroke="#FFC400" stroke-width="0.5">DESDE 1990</text>
+</svg>

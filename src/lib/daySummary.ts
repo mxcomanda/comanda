@@ -46,7 +46,7 @@ export function mexicoTimeString(iso: string): string {
   } catch { return iso; }
 }
 
-export function computeDaySummary(accounts: Account[], date: string): DaySummary {
+export function computeDaySummary(accounts: Account[], date: string, tables: { id: number; label: string }[] = DZIB_TABLES): DaySummary {
   const todays = accounts.filter((a) => a.createdAt && mexicoDateString(new Date(a.createdAt)) === date && !a.cutDate);
   // Ganado = pagadas, o cerradas CON método de pago (pagadas y luego
   // cerradas). Una cerrada sin método no es dinero ganado.
@@ -54,7 +54,7 @@ export function computeDaySummary(accounts: Account[], date: string): DaySummary
   const closedUnpaid: DayOpenAccount[] = todays
     .filter((a) => a.status === "cerrada" && !a.payment?.method)
     .map((a) => ({ accountId: a.id, tableLabel: a.tableLabel, status: a.status, totalCents: a.totalCents }));
-  const perTable: DayTableSummary[] = DZIB_TABLES.map((t) => {
+  const perTable: DayTableSummary[] = tables.map((t) => {
     const mine = done.filter((a) => a.tableId === t.id);
     return { tableId: t.id, tableLabel: t.label, orders: mine.length, totalCents: mine.reduce((s, a) => s + a.totalCents, 0) };
   });

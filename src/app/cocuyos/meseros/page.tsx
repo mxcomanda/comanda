@@ -1,0 +1,179 @@
+// Meseros de Los Cocuyos: MAPA GRÁFICO del salón, con el pedido
+// completo arriba de cada mesa. La vista se actualiza cada 5 s.
+// - Fila izquierda: mesas 1 al 5, numeradas de ABAJO hacia arriba
+//   (la 1 abajo, la 5 arriba).
+// - Fila derecha: mesas 6 al 10, numeradas de ARRIBA hacia abajo
+//   (la 6 arriba, la 10 abajo).
+// - Puerta de entrada ABAJO del mapa.
+// - Mesa ACTIVA (cuenta/pedido abierto): ROSA las del lado izquierdo,
+//   AZUL las del lado derecho. Sin actividad: piedra/blanca, solo
+//   contorno. Cada mesa muestra SOLO su número en grande.
+// - Cuando cocina o barra marca un ítem como LISTO para recoger, la
+//   mesa se queda PARPADEANDO en su color asignado hasta que el mesero
+//   lo marca entregado o se cierra la cuenta.
+// - Arriba de cada mesa va el recuadro con su pedido COMPLETO: ítems
+//   con estado y estación (Cocina/Barra), indicaciones, pago, propina
+//   y Marcar entregado. Los meseros NO cierran cuentas: solo Caja
+//   libera las mesas.
+"use client";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { STATUS_LABEL } from "@/lib/types";
+import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "@/app/dzib/StaffAlerts";
+
+export default function MeserosView() {
+  const [data, setData] = useState<any>(null);
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const staffAlerts = useStaffAlerts();
+  function load() {
+    fetch("/api/cocuyos/accounts").then(async (r) => {
+      if (!r.ok) { setErr("Sin acceso: entra primero con tu clave en /cocuyos/personal"); return; }
+      setErr(""); setData(await r.json());
+    }).catch(() => setErr("No se pudieron cargar las cuentas"));
+  }
+  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
+  async function post(action: string, body: any, okMsg?: string) {
+    const res = await fetch("/api/cocuyos/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...body }) });
+    const d = await res.json().catch(() => null);
+    setMsg(res.ok ? (okMsg ?? d?.message ?? "Listo.") : (d?.error ?? "No se pudo hacer"));
+    load();
+  }
+  const accounts = (data?.accounts ?? []).filter((a: any) => a.status !== "cerrada");
+  const ready = accounts.flatMap((a: any) => a.items.filter((i: any) => i.status === "listo").map((i: any) => ({ ...i, tableLabel: a.tableLabel })));
+  const changeReady = accounts.filter((a: any) => a.changeReady && a.payment?.method === "efectivo" && a.status !== "cerrada");
+  const terminal = accounts.filter((a: any) => a.status === "cuenta-pedida" && a.payment?.method === "terminal");
+  const assistance = (data?.assistance ?? []) as any[];
+  const prevAssistanceRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!data) return;
+    const all = (data.accounts ?? []) as any[];
+    const delivered = all.flatMap((a: any) => (a.items ?? []).filter((i: any) => i.status === "entregado").map((i: any) => `listo:${i.id}`));
+    const resolved = all.flatMap((a: any) => {
+      const out: string[] = [];
+      if (a.status !== "cuenta-pedida") out.push(`terminal:${a.id}`);
+      if (!a.changeReady || a.status === "cerrada" || a.status === "pagada") out.push(`cambio:${a.id}`);
+      return out;
+    });
+    const currentAssistance = assistance.map((c: any) => `asistencia:${c.id}`);
+    const goneAssistance = [...prevAssistanceRef.current].filter((k) => !currentAssistance.includes(k));
+    prevAssistanceRef.current = new Set(currentAssistance);
+    staffAlerts.retract([...delivered, ...resolved, ...goneAssistance]);
+    const events: StaffEvent[] = [
+      ...ready.map((i: any) => ({ key: `listo:${i.id}`, text: `¡Pedido listo para recoger! ${i.name} (${i.tableLabel})` })),
+      ...changeReady.map((a: any) => ({ key: `cambio:${a.id}`, text: `¡Cambio listo en caja para ${a.tableLabel}! Lleva $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)} de cambio.` })),
+      ...terminal.map((a: any) => ({ key: `terminal:${a.id}`, text: `${a.tableLabel} pidió la cuenta con terminal — lleva la terminal · Cobra $${(a.totalCents / 100).toFixed(0)}` })),
+      ...assistance.map((c: any) => ({ key: `asistencia:${c.id}`, text: `¡${c.tableLabel} necesita asistencia! Ve a la mesa.` })),
+    ];
+    staffAlerts.notify(events);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+  const byTable = new Map<number, any>();
+  for (const a of accounts) byTable.set(a.tableId, a);
+
+  function renderAccountCard(a: any) {
+    const pendingItems = (a.items ?? []).filter((i: any) => ["pendiente", "preparando", "listo"].includes(i.status));
+    return (
+      <div className="card">
+        <b>{a.tableLabel}</b> — {a.status} — Total: ${(a.totalCents / 100).toFixed(0)}
+        {a.payment && <div className="muted">Pago: {a.payment.method === "efectivo" ? `Efectivo con $${(a.payment.cashCents ?? 0) / 100} · Cambio: $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)}` : "Tarjeta (terminal)"}{a.changeReady ? " · Cambio listo ✓" : ""}</div>}
+        {(a.tipCents ?? 0) > 0 && <div className="muted">💰 Propina: ${((a.tipCents ?? 0) / 100).toFixed(0)}</div>}
+        {a.items?.map((i: any) => (
+          <div key={i.id}>
+            <div className="item">
+              <span>{i.name}{i.qty > 1 ? ` ×${i.qty}` : ""} <span className="muted">· {i.station === "barra" ? "Barra" : "Cocina"}</span><div className="muted">{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</div></span>
+              <span>
+                {i.status !== "espera" && i.status !== "entregado" && i.status !== "cancelado" && (
+                  <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`listo:${i.id}`]); void post("deliver", { accountId: a.id, itemId: i.id }); }}>Marcar entregado</button>
+                )}
+                {i.status === "entregado" && <span className="status-pill entregado">Entregado ✓</span>}
+              </span>
+            </div>
+            {i.notes && <div className="notes-box">⚠ Indicaciones: {i.notes}</div>}
+          </div>
+        ))}
+        {pendingItems.length > 0 && <p className="muted">⚠ Sin entregar: {pendingItems.map((i: any) => i.name).join(", ")}</p>}
+        {a.status === "abierta" && <p className="muted">Sin pagar todavía (total ${(a.totalCents / 100).toFixed(0)}).</p>}
+        {a.status === "cuenta-pedida" && <p className="muted">Cuenta pedida — esperando a caja.</p>}
+      </div>
+    );
+  }
+
+  function salonCell(id: number, side: "izq" | "der", num: string) {
+    const acc = byTable.get(id);
+    const hasReady = (acc?.items ?? []).some((i: any) => i.status === "listo");
+    return (
+      <div className="salon-cell" key={id}>
+        {acc ? (
+          <div className="pedido-box">{renderAccountCard(acc)}</div>
+        ) : (
+          <div className="pedido-libre">Libre</div>
+        )}
+        <div className={`mesa-dibujo${acc ? (side === "izq" ? " activa-izq" : " activa-der") : ""}${hasReady ? " lista" : ""}`}>
+          <span className="silla s-n" aria-hidden="true" />
+          <span className="silla s-s" aria-hidden="true" />
+          <span className="silla s-e" aria-hidden="true" />
+          <span className="silla s-o" aria-hidden="true" />
+          <span className="mesa-redonda">
+            <span className="mesa-numero">{num}</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dzib cocuyos">
+    <main className="wrap">
+      <p style={{ margin: "0 0 4px" }}><Image src="/los-cocuyos-logo.svg" alt="Taquería Los Cocuyos" width={64} height={64} /></p>
+      <h2>Los Cocuyos — Meseros</h2>
+      <p className="muted">Mapa del salón con el pedido de cada mesa. Se actualiza cada 5 segundos.</p>
+      <StaffAlertUI alerts={staffAlerts} />
+      {ready.length > 0 && (
+        <div className="alert gold">🔔 ¡Pedido listo para recoger! {ready.map((i: any) => `${i.name} (${i.tableLabel})`).join(" · ")}</div>
+      )}
+      {changeReady.map((a: any) => (
+        <div className="alert green" key={a.id}>💵 ¡Cambio listo en caja para {a.tableLabel}! Lleva ${((a.payment.cashCents ?? 0) - a.totalCents) / 100} de cambio.</div>
+      ))}
+      {terminal.map((a: any) => (
+        <div className="alert gold" key={a.id}>💳 {a.tableLabel} pidió la cuenta con terminal — lleva la terminal. <b style={{ fontSize: 22 }}>Cobra: ${(a.totalCents / 100).toFixed(0)}</b></div>
+      ))}
+      {assistance.map((c: any) => (
+        <div className="alert gold" key={c.id}>🔔 ¡{c.tableLabel} necesita asistencia! Ve a la mesa.{" "}
+          <button type="button" className="staff-btn" onClick={() => { staffAlerts.retract([`asistencia:${c.id}`]); void post("attend-assistance", { callId: c.id }, "Asistencia atendida."); }}>Atendido ✓</button>
+        </div>
+      ))}
+      <p><button onClick={load}>Actualizar</button></p>
+      {msg && <p>{msg}</p>}
+      {err && <p className="danger">{err}</p>}
+      {!err && accounts.length === 0 && <p className="muted">No hay cuentas abiertas.</p>}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, margin: "10px 0" }}>
+        <div className="card" style={{ flex: 1, margin: 0 }}><b>💰 Propinas · Mesas 1–5</b><div style={{ fontSize: 26 }}>${((data?.tips?.left ?? 0) / 100).toFixed(0)}</div></div>
+        <div className="card" style={{ flex: 1, margin: 0 }}><b>💰 Propinas · Mesas 6–10</b><div style={{ fontSize: 26 }}>${((data?.tips?.right ?? 0) / 100).toFixed(0)}</div></div>
+      </div>
+      <h3>Mapa del salón</h3>
+      <p className="muted">Izquierda: mesas 1 a 5 (la 1 abajo). Derecha: mesas 6 a 10 (la 6 arriba). Mesa activa: <b style={{ color: "#be185d" }}>rosa</b> a la izquierda, <b style={{ color: "#1d4ed8" }}>azul</b> a la derecha. Cuando cocina o barra marca un ítem listo, la mesa <b>parpadea</b> en su color hasta que se entrega. Se entra por la puerta de abajo.</p>
+      <div className="salon">
+        <div className="salon-grid">
+          <div className="salon-col">
+            {[5, 4, 3, 2, 1].map((id) => salonCell(id, "izq", String(id)))}
+          </div>
+          <div className="salon-aisle" aria-hidden="true"><span>↑</span></div>
+          <div className="salon-col">
+            {[6, 7, 8, 9, 10].map((id) => salonCell(id, "der", String(id)))}
+          </div>
+        </div>
+        <div className="salon-puerta">
+          <svg viewBox="0 0 120 74" width="120" height="74" aria-hidden="true">
+            <path d="M 12 12 A 58 58 0 0 1 70 70" fill="none" stroke="#c9a227" strokeWidth="2" strokeDasharray="5 4" />
+            <line x1="12" y1="70" x2="12" y2="12" stroke="#241a12" strokeWidth="4" strokeLinecap="round" />
+            <circle cx="12" cy="70" r="4" fill="#241a12" />
+          </svg>
+          <div className="salon-puerta-label">↑ ENTRADA</div>
+        </div>
+      </div>
+      <p><a href="/cocuyos">Volver al menú</a> · <a href="/cocuyos/personal">Personal</a></p>
+    </main>
+    </div>
+  );
+}
