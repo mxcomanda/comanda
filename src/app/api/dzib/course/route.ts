@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, accountTotal } from "@/lib/store";
 import { hasPostgres, getAccountWithItems, requestCourse } from "@/lib/pg";
-import { lunchOpen } from "@/lib/hours";
+import { lunchOpen, LUNCH_VISIBLE } from "@/lib/hours";
 
 const ORDER = ["primero", "segundo", "tercero"] as const;
 
@@ -9,6 +9,11 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const tiempo = body?.tiempo as (typeof ORDER)[number];
   if (!ORDER.includes(tiempo)) return NextResponse.json({ error: "Tiempo no válido" }, { status: 400 });
+  // SOLO DESAYUNOS por el momento (LUNCH_VISIBLE=false, decisión del
+  // dueño 25 nov 2026): no se puede pedir ningún tiempo de comida,
+  // aunque la corrida ya estuviera armada. Las cuentas ya abiertas se
+  // siguen viendo y cerrando en cocina, meseros y caja.
+  if (!LUNCH_VISIBLE) return NextResponse.json({ error: "Por el momento solo estamos sirviendo desayunos." }, { status: 400 });
   // La comida corrida se sirve a partir de la 1:00 pm (hora de México).
   // Aunque la corrida se haya armado antes, no se puede pedir ningún
   // tiempo antes de la 1:00 pm.

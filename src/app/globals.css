@@ -170,6 +170,42 @@ button { cursor: pointer; }
 .alert-banner button { flex: none; background: #fff; color: var(--dzib-ink); border: 2px solid var(--dzib-ink); border-radius: 999px; padding: 8px 18px; font-weight: 900; }
 @keyframes alert-flash { 0%, 100% { background: var(--red); } 50% { background: #ff8a5c; } }
 
+/* ---------- Mapa del salón (meseros) ---------- */
+/* Salón dibujado: dos filas de mesas (izquierda 1–5 de abajo hacia
+   arriba, derecha 6–10 de arriba hacia abajo), pasillo central y puerta
+   de entrada ABAJO (se entra desde abajo hacia arriba, con su arco de
+   apertura). Mesa activa: ROSA a la izquierda, AZUL a la derecha. Sin
+   actividad: piedra/blanca, solo contorno. Arriba de cada mesa va el
+   recuadro con su pedido completo; el segundo local (5B y 6B) va en una
+   franja compacta debajo del mapa. Pensado para el celular del mesero
+   en piso: dos columnas que se leen de un vistazo. */
+.dzib .salon { border: 3px solid var(--dzib-ink); border-radius: 16px; background: #f5efe0; padding: 14px 10px 0; margin: 12px 0; }
+.dzib .salon-grid { display: grid; grid-template-columns: 1fr 30px 1fr; gap: 6px; align-items: start; }
+.dzib .salon-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dzib .salon-aisle { display: flex; align-items: center; justify-content: center; min-height: 100%; color: var(--gold); font-size: 26px; font-weight: 900; }
+.dzib .salon-cell { min-width: 0; }
+.dzib .pedido-box .card { padding: 10px; margin-bottom: 8px; box-shadow: 3px 3px 0 var(--dzib-ink); font-size: 14px; }
+.dzib .pedido-box .item { flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+.dzib .pedido-box button { font-size: 13px; padding: 5px 10px; }
+.dzib .pedido-box .notes-box { font-size: 14px; padding: 8px 10px; }
+.dzib .pedido-libre { text-align: center; color: #8a7f68; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 8px 0 4px; }
+.dzib .mesa-dibujo { position: relative; height: 122px; display: flex; align-items: center; justify-content: center; }
+.dzib .mesa-redonda { width: 88px; height: 88px; border-radius: 50%; border: 3px solid var(--dzib-ink); background: #fffdf6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.dzib .mesa-numero { font-family: 'Oswald', sans-serif; font-size: 30px; font-weight: 700; line-height: 1; color: var(--dzib-ink); }
+.dzib .mesa-estado { font-size: 10px; font-weight: 800; color: #555; text-align: center; line-height: 1.15; padding: 0 6px; }
+.dzib .mesa-dibujo.activa-izq .mesa-redonda { background: #f9a8d4; border-color: #be185d; }
+.dzib .mesa-dibujo.activa-izq .mesa-numero { color: #831843; }
+.dzib .mesa-dibujo.activa-der .mesa-redonda { background: #93c5fd; border-color: #1d4ed8; }
+.dzib .mesa-dibujo.activa-der .mesa-numero { color: #172554; }
+.dzib .silla { position: absolute; width: 16px; height: 16px; border: 2px solid var(--dzib-ink); border-radius: 4px; background: #fffdf6; }
+.dzib .silla.s-n { top: 4px; left: 50%; margin-left: -8px; }
+.dzib .silla.s-s { bottom: 4px; left: 50%; margin-left: -8px; }
+.dzib .silla.s-e { right: 2px; top: 50%; margin-top: -8px; }
+.dzib .silla.s-o { left: 2px; top: 50%; margin-top: -8px; }
+.dzib .salon-puerta { width: 190px; margin: 4px auto -3px; background: #f5efe0; text-align: center; padding: 2px 0 0; }
+.dzib .salon-puerta-label { font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: .22em; color: var(--dzib-ink); margin-top: -8px; padding-bottom: 6px; }
+.dzib .salon-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+
 /* ---------- Botón circular fijo "Asistencia mesero" (comensal) ---------- */
 .dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 96px; height: 96px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 4px 4px 0 var(--dzib-ink); font-weight: 900; font-size: 13px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; }
 .dzib .fab-waiter:disabled { background: #2e7d32; color: #fff; }

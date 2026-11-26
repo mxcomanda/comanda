@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { db, newItemId, accountTotal } from "@/lib/store";
 import { DZIB_TABLES } from "@/data/dzib";
 import { hasPostgres, getOrCreateAccount, getOpenAccountByTable, getAccountWithItems, addOrderItems, setAccountPayment, setItemNotes } from "@/lib/pg";
-import { lunchOpen } from "@/lib/hours";
+import { lunchOpen, LUNCH_VISIBLE } from "@/lib/hours";
 import type { Account } from "@/lib/types";
 
 // Estado de una cuenta (lo usa el comensal para su panel de Status y el
@@ -105,7 +105,14 @@ export async function POST(req: Request) {
   // desayunos ya no tienen límite de horario (todo el día, por
   // decisión del dueño); la comida corrida solo a partir de la 1:00 pm.
   // Lo por separado (sin tiempo) no se bloquea.
+  // SOLO DESAYUNOS por el momento (LUNCH_VISIBLE=false, decisión del
+  // dueño 25 nov 2026): el comensal no puede iniciar NADA de comida —
+  // ni corridas (tiempo), ni agua, ni platos sueltos. Solo entran los
+  // desayunos (group "desayuno"). Las cuentas ya abiertas no se tocan:
+  // cocina, meseros y caja las siguen viendo y cerrando con normalidad.
   const hasCourse = items.some((i: { tiempo: string | null }) => i.tiempo);
+  if (!LUNCH_VISIBLE && items.some((i: { group: string | null }) => i.group !== "desayuno"))
+    return NextResponse.json({ error: "Por el momento solo estamos sirviendo desayunos." }, { status: 400 });
   if (hasCourse && !lunchOpen())
     return NextResponse.json({ error: "La comida corrida se sirve a partir de la 1:00 pm." }, { status: 400 });
   if (hasPostgres) {

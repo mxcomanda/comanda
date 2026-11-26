@@ -1,12 +1,14 @@
 // /dzib — vista del comensal. Acceso solo por QR de mesa (?mesa=N).
-// Submenús desplegables: Desayunos (todo el día, sin horario), Menú de comida
-// del día (a partir de la 1:00 pm, por tiempos) y Pedir por separado
-// (sin horario). Horarios en hora de Ciudad de México. El agua del día
-// pedida dentro de una comida llega a cocina JUNTO con el primer tiempo
-// de esa comida, con su contador (x1, x2…). La mesa puede pedir MÁS DE
-// UNA comida corrida: cada corrida es un grupo independiente con su propio
-// avance 1º → 2º → 3º (botones grandes por corrida), pero el total se paga
-// junto en una sola cuenta. El panel "Tu pedido" vive FUERA de los
+// SOLO DESAYUNOS por el momento (LUNCH_VISIBLE=false en lib/hours.ts,
+// decisión del dueño 25 nov 2026): la comida está OCULTA, no eliminada.
+// Submenús desplegables: Desayunos (todo el día, sin horario). El Menú
+// de comida del día, la comida corrida y Pedir por separado vuelven
+// solos al poner LUNCH_VISIBLE en true. El agua del día pedida dentro
+// de una comida llega a cocina JUNTO con el primer tiempo de esa
+// comida, con su contador (x1, x2…). La mesa puede pedir MÁS DE UNA
+// comida corrida: cada corrida es un grupo independiente con su propio
+// avance 1º → 2º → 3º (botones grandes por corrida), pero el total se
+// paga junto en una sola cuenta. El panel "Tu pedido" vive FUERA de los
 // acordeones, hasta abajo, y una barra superior fija muestra en todo
 // momento lo que se está pidiendo. El pedido NO se pierde al cambiar de
 // dispositivo: al abrir con el QR se carga la cuenta abierta de la mesa
@@ -16,7 +18,7 @@
 import { useEffect, useState } from "react";
 import { DZIB_BREAKFAST, DZIB_DAILY_MENU_TODAY, DZIB_SETTINGS, DZIB_TABLES } from "@/data/dzib";
 import { mxn, STATUS_LABEL, menuPriceForThird } from "@/lib/types";
-import { lunchOpen, mexicoHour } from "@/lib/hours";
+import { lunchOpen, mexicoHour, LUNCH_VISIBLE } from "@/lib/hours";
 
 const MENU = DZIB_DAILY_MENU_TODAY;
 const TIEMPOS = ["primero", "segundo", "tercero"] as const;
@@ -70,7 +72,14 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const [, setTimeTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTimeTick((n) => n + 1), 60000); return () => clearInterval(t); }, []);
   const lOpen = lunchOpen();
+  // SOLO DESAYUNOS por el momento (LUNCH_VISIBLE=false): la comida está
+  // oculta del comensal, no eliminada. Todo lo de comida en esta vista
+  // (acordeón, corridas, por separado, agua) se renderiza solo si la
+  // bandera está prendida; las cuentas de comida ya abiertas se siguen
+  // viendo en el Status y se pagan con normalidad.
+  const lunchVisible = LUNCH_VISIBLE;
   const [openSection, setOpenSection] = useState<"desayunos" | "comida" | "separado" | null>(() => {
+    if (!LUNCH_VISIBLE) return "desayunos";
     return mexicoHour() < 13 ? "desayunos" : "comida";
   });
   const [openTiempo, setOpenTiempo] = useState<Tiempo | null>("primero");
@@ -270,8 +279,13 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // pago. La cuenta (Postgres) es la fuente de verdad, no el navegador.
   const corridasWithDishes = allCorridaIds.filter((id) => selectedTiempos(id).length > 0);
   const allCorridasRequested = corridasWithDishes.every((id) => selectedTiempos(id).every((t) => requested(t, id)));
+  // Con la comida oculta (LUNCH_VISIBLE=false), una cuenta de comida ya
+  // abierta se puede pagar tal como está: el comensal ya no puede pedir
+  // los tiempos que le faltan, así que no se le exige completarlos para
+  // pagar el total que Caja ve. Con la comida visible, se exige lo de
+  // siempre (todos los tiempos pedidos).
   const showPay = Boolean(accountId) && account?.status === "abierta" && extras.length === 0 &&
-    (corridasWithDishes.length > 0 ? allCorridasRequested : (extrasSent || sentExtras.length > 0));
+    (corridasWithDishes.length > 0 ? (lunchVisible ? allCorridasRequested : true) : (extrasSent || sentExtras.length > 0));
 
   // ---- Acciones ----
   // group: "desayuno" = desayuno (sencillo, especial, guisado, otra
@@ -574,14 +588,20 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           <div className="dzib-topbar-inner">
             <span className="badge">{table.label}</span>
             <span className="topbar-summary">
-              {allCorridaIds.length === 0 && extras.length === 0
-                ? "Todavía no pides nada — elige abajo."
-                : allCorridaIds.map((id) => {
+              {/* Resumen de comidas solo si la comida está visible o la
+                  mesa ya tiene una comida en su cuenta abierta. */}
+              {(() => {
+                const showCorridaSummary = lunchVisible || accountCorridaIds.length > 0;
+                if ((!showCorridaSummary || allCorridaIds.length === 0) && extras.length === 0) return "Todavía no pides nada — elige abajo.";
+                return (<>
+                  {showCorridaSummary && allCorridaIds.map((id) => {
                     const names = TIEMPOS.filter((t) => selFor(id)[t]).map((t) => selFor(id)[t].name);
                     return <span key={id} className="topbar-corrida">Comida {id}: {names.length > 0 ? names.join(" · ") : "sin elegir"} · {mxn(corridaTotal(id))}</span>;
                   })}
-              {pendingBreakfast.length > 0 && <span className="topbar-corrida">Desayunos: {pendingBreakfast.length} · {mxn(pendingBreakfastTotal)}</span>}
-              {pendingSeparate.length > 0 && <span className="topbar-corrida">Por separado: {pendingSeparate.length} · {mxn(pendingSeparateTotal)}</span>}
+                  {pendingBreakfast.length > 0 && <span className="topbar-corrida">Desayunos: {pendingBreakfast.length} · {mxn(pendingBreakfastTotal)}</span>}
+                  {lunchVisible && pendingSeparate.length > 0 && <span className="topbar-corrida">Por separado: {pendingSeparate.length} · {mxn(pendingSeparateTotal)}</span>}
+                </>);
+              })()}
             </span>
             <b className="topbar-total">Total: {mxn(grandTotal)}</b>
           </div>
@@ -615,6 +635,9 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         </Accordion>
 
         {/* ---------- MENÚ DE COMIDA DEL DÍA ---------- */}
+        {/* Oculto por LUNCH_VISIBLE=false (solo desayunos por el momento).
+            No se borra nada: vuelve solo al prender la bandera. */}
+        {lunchVisible && (
         <Accordion title="Menú de comida del día" sub={lOpen ? "Menú sencillo de 3 tiempos · $91" : "La comida corrida se sirve a partir de la 1:00 pm"} open={openSection === "comida"} onToggle={() => setOpenSection(openSection === "comida" ? null : "comida")} disabled={!lOpen}>
           <p className="dzib-today"><b>Menú sencillo de 3 tiempos</b> (no incluye agua ni postre). Servicio de 1:30 pm a 7:00 pm. Todos nuestros precios incluyen IVA.</p>
           <p className="muted"><b>El precio lo define tu 3er tiempo:</b> menú de <b>$91</b> con los guisados (pescaditos, filete empanizado, sierra, ceviche…), menú de <b>$78</b> con pollo a la pibil y ensaladas, o el precio del especial que elijas ($140 a $190). El 1er y el 2º tiempo van <b>incluidos</b>. El 2º tiempo solo, fuera de la comida, cuesta $26.</p>
@@ -690,8 +713,13 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             </div>
           </div>
         </Accordion>
+        )}
 
         {/* ---------- PEDIR POR SEPARADO ---------- */}
+        {/* Oculto por LUNCH_VISIBLE=false: su contenido de comida (platos
+            sueltos y agua) no se ofrece por el momento. Los desayunos ya
+            tienen su propio acordeón arriba; nada se borra. */}
+        {lunchVisible && (
         <Accordion title="Pedir por separado" sub="A la carta · precio individual" open={openSection === "separado"} onToggle={() => setOpenSection(openSection === "separado" ? null : "separado")}>
           <p className="muted">Cualquier platillo por su precio individual, fuera del menú sencillo. Se envía directo a cocina.</p>
           <SubAcc title="Desayunos" open={openBreakfast === "sep-des"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-des" ? null : "sep-des")}>
@@ -717,8 +745,13 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             )))}
           </SubAcc>
         </Accordion>
+        )}
 
         {/* ---------- TU PEDIDO (fuera de los submenús, hasta abajo) ---------- */}
+        {/* La tarjeta de comidas solo se muestra si la comida está
+            visible o si la mesa ya tiene una comida en su cuenta abierta
+            (para que esa cuenta se siga viendo y pagando). */}
+        {(lunchVisible || accountCorridaIds.length > 0) && (
         <div className="card" style={{ marginTop: 18 }}>
           <b>Tu pedido — {table?.label ?? "sin mesa"}</b>
           {allCorridaIds.length === 0 && <p className="muted">Todavía no armas ninguna comida. Elige tus tiempos arriba, en “Menú de comida del día”.</p>}
@@ -761,7 +794,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 {chosen.length > 0 && (
                   <p><b>{chosen.length === 3 ? `Tu menú: ${mxn(corridaTotal(id))}` : `Total de esta comida: ${mxn(corridaTotal(id))}`}</b>{chosen.length === 3 ? ` · El precio lo definió tu 3er tiempo (${sel.tercero?.name})` : ""}</p>
                 )}
-                {table && next && (
+                {table && next && lunchVisible && (
                   <>
                     <button type="button" className="big-btn" disabled={!lOpen || !canRequest(next, id)} onClick={() => pedirTiempo(id, next)}>
                       {REQUEST_LABEL[next]}
@@ -776,17 +809,18 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
               </div>
             );
           })}
-          {table && lOpen && (
+          {table && lunchVisible && lOpen && (
             <p><button type="button" onClick={addCorrida}>＋ Agregar otra comida</button></p>
           )}
           {!table && <p className="muted">Escanea el QR de tu mesa para pedir.</p>}
         </div>
+        )}
 
         {/* Desayunos y por separado: lo que agregaste y el botón de enviar
             a cocina. Los desayunos van en su propio grupo ("Desayunos"),
             no mezclados con lo por separado. */}
         <div className="card" style={{ marginTop: 14 }}>
-          <b>Desayunos y por separado</b>
+          <b>{lunchVisible ? "Desayunos y por separado" : "Desayunos"}</b>
           {sentBreakfast.length > 0 && (
             <>
               <p style={{ marginTop: 10 }}><b>Desayunos — enviados ✓</b></p>
@@ -832,7 +866,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
             </>
           )}
           {extras.length === 0 && sentExtras.length === 0 && (
-            <p className="muted">Todavía no agregaste desayunos ni nada por separado.</p>
+            <p className="muted">{lunchVisible ? "Todavía no agregaste desayunos ni nada por separado." : "Todavía no agregaste desayunos."}</p>
           )}
           {extras.length > 0 && (
             <>

@@ -13,6 +13,16 @@ export const LUNCH_START_HOUR = 13; // 1:00 pm
 // restaurar el corte en breakfastOpen).
 export const BREAKFAST_ALL_DAY = true;
 
+// SOLO DESAYUNOS por el momento (decisión del dueño, 25 nov 2026):
+// la comida queda OCULTA del comensal, no eliminada. Con esta bandera
+// en false, /dzib solo muestra Desayunos y el servidor rechaza nuevos
+// pedidos de comida (corridas, agua y platos sueltos). El menú del día
+// en la base de datos, el Admin y las vistas de cocina/meseros/caja NO
+// se tocan: las cuentas de comida ya abiertas se siguen viendo y
+// cerrando con normalidad. Para volver a mostrar la comida, ponerla en
+// true (y nada más: el código y los datos siguen intactos).
+export const LUNCH_VISIBLE = false;
+
 export function mexicoHour(now: Date = new Date()): number {
   const raw = typeof process !== "undefined" ? process.env.DZIB_FAKE_MEXICO_HOUR : undefined;
   if (raw !== undefined && raw !== "") {
