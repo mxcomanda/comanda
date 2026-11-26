@@ -8,9 +8,12 @@
 // comida, con su contador (x1, x2…). La mesa puede pedir MÁS DE UNA
 // comida corrida: cada corrida es un grupo independiente con su propio
 // avance 1º → 2º → 3º (botones grandes por corrida), pero el total se
-// paga junto en una sola cuenta. El panel "Tu pedido" vive FUERA de los
-// acordeones, hasta abajo, y una barra superior fija muestra en todo
-// momento lo que se está pidiendo. El pedido NO se pierde al cambiar de
+// paga junto en una sola cuenta. El panel "Tu pedido" vive FIJO en una
+// columna lateral derecha (en celular se abre con un botón flotante
+// "Tu pedido" como hoja superpuesta); ya no hay barra superior fija:
+// la mesa y el total viven dentro del propio panel. El botón de pedir
+// a cocina PARPADEA en cuanto hay algo en espera listo para pedirse.
+// El pedido NO se pierde al cambiar de
 // dispositivo: al abrir con el QR se carga la cuenta abierta de la mesa
 // desde Postgres (única fuente de verdad). Diseño Dzib: banda rótulo
 // oscura, piedra, naranja quemado / dorado.
@@ -95,6 +98,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const [editingId, setEditingId] = useState(1);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [extrasSent, setExtrasSent] = useState(false);
+  // Panel "Tu pedido" en celular: hoja superpuesta que se abre con el
+  // botón flotante. En pantallas anchas el panel siempre está visible
+  // a la derecha y este estado no hace nada.
+  const [pedidoOpen, setPedidoOpen] = useState(false);
   // Elección de bebida/acompañamiento de un desayuno sencillo o del
   // guisado del día: qué platillo tiene el selector abierto y qué lleva
   // elegido (por defecto, café de olla + jugo de naranja). Solo los
@@ -582,32 +589,8 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           <div className="dzib-sub">Regina 54 · Centro Histórico · Cocina casera mexicana</div>
         </div>
       </header>
-      {/* Barra superior fija: lo que estás pidiendo, visible siempre. */}
-      {table && (
-        <div className="dzib-topbar">
-          <div className="dzib-topbar-inner">
-            <span className="badge">{table.label}</span>
-            <span className="topbar-summary">
-              {/* Resumen de comidas solo si la comida está visible o la
-                  mesa ya tiene una comida en su cuenta abierta. */}
-              {(() => {
-                const showCorridaSummary = lunchVisible || accountCorridaIds.length > 0;
-                if ((!showCorridaSummary || allCorridaIds.length === 0) && extras.length === 0) return "Todavía no pides nada — elige abajo.";
-                return (<>
-                  {showCorridaSummary && allCorridaIds.map((id) => {
-                    const names = TIEMPOS.filter((t) => selFor(id)[t]).map((t) => selFor(id)[t].name);
-                    return <span key={id} className="topbar-corrida">Comida {id}: {names.length > 0 ? names.join(" · ") : "sin elegir"} · {mxn(corridaTotal(id))}</span>;
-                  })}
-                  {pendingBreakfast.length > 0 && <span className="topbar-corrida">Desayunos: {pendingBreakfast.length} · {mxn(pendingBreakfastTotal)}</span>}
-                  {lunchVisible && pendingSeparate.length > 0 && <span className="topbar-corrida">Por separado: {pendingSeparate.length} · {mxn(pendingSeparateTotal)}</span>}
-                </>);
-              })()}
-            </span>
-            <b className="topbar-total">Total: {mxn(grandTotal)}</b>
-          </div>
-        </div>
-      )}
-      <main className="wrap">
+      <main className="wrap dzib-layout">
+        <div className="dzib-menu-col">
         {!table ? (
           <p className="danger">Escanea el código QR de tu mesa para pedir. Sin QR solo puedes ver el menú.</p>
         ) : (
@@ -624,7 +607,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         <Accordion title="Desayunos" sub="Todo el día" open={openSection === "desayunos"} onToggle={() => setOpenSection(openSection === "desayunos" ? null : "desayunos")}>
           {/* El guisado del día ($78) también incluye café/té y jugo/fruta,
               igual que los sencillos: se agrega con el mismo selector. */}
-          {breakfastItemRow({ id: "guisado", name: DZIB_SETTINGS.guisadoDelDia, description: "Guisado de hoy", priceCents: DZIB_SETTINGS.guisadoPriceCents, category: "desayuno" })}
+          {breakfastItemRow({ id: "guisado", name: DZIB_SETTINGS.guisadoDelDia, description: "", priceCents: DZIB_SETTINGS.guisadoPriceCents, category: "desayuno" })}
           <p className="muted">Desayunos sencillos y guisado del día incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
           {breakfastGroups.map((g) => (
             <SubAcc key={g.key} title={g.title} open={openBreakfast === g.key} onToggle={() => setOpenBreakfast(openBreakfast === g.key ? null : g.key)}>
@@ -747,7 +730,20 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         </Accordion>
         )}
 
-        {/* ---------- TU PEDIDO (fuera de los submenús, hasta abajo) ---------- */}
+        {msg && <p>{msg}</p>}
+        {payResult && account?.status === "cuenta-pedida" && (
+          <div className="alert green">Cuenta pedida. {account?.payment?.method === "efectivo" ? `Tu cambio es ${mxn(payResult.changeCents)}.` : "El mesero trae la terminal."}</div>
+        )}
+        <p><a href="/dzib/personal">Personal</a></p>
+        </div>
+        <aside className={`dzib-pedido-aside${pedidoOpen ? " abierto" : ""}`}>
+          <div className="pedido-aside-head">
+            <b>Tu pedido</b>
+            {table && <span className="badge">{table.label}</span>}
+            <span className="pedido-aside-total">Total: {mxn(grandTotal)}</span>
+            <button type="button" className="pedido-close" onClick={() => setPedidoOpen(false)} aria-label="Cerrar pedido">✕</button>
+          </div>
+        {/* ---------- TU PEDIDO (columna lateral derecha) ---------- */}
         {/* La tarjeta de comidas solo se muestra si la comida está
             visible o si la mesa ya tiene una comida en su cuenta abierta
             (para que esa cuenta se siga viendo y pagando). */}
@@ -796,7 +792,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 )}
                 {table && next && lunchVisible && (
                   <>
-                    <button type="button" className="big-btn" disabled={!lOpen || !canRequest(next, id)} onClick={() => pedirTiempo(id, next)}>
+                    <button type="button" className={lOpen && canRequest(next, id) ? "big-btn parpadea-pedir" : "big-btn"} disabled={!lOpen || !canRequest(next, id)} onClick={() => pedirTiempo(id, next)}>
                       {REQUEST_LABEL[next]}
                     </button>
                     {!lOpen ? <p className="muted">La comida corrida se sirve a partir de la 1:00 pm.</p>
@@ -871,20 +867,22 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           {extras.length > 0 && (
             <>
               <p><b>Total sin enviar: {mxn(extrasTotal)}</b>{pendingBreakfast.length > 0 && pendingSeparate.length > 0 ? ` (Desayunos ${mxn(pendingBreakfastTotal)} · Por separado ${mxn(pendingSeparateTotal)})` : ""}</p>
-              <button type="button" className="big-btn" onClick={sendExtras}>Enviar pedido a cocina</button>
+              <button type="button" className="big-btn parpadea-pedir" onClick={sendExtras}>Enviar pedido a cocina</button>
             </>
           )}
         </div>
 
         {pagarPanel}
         {statusPanel}
+        </aside>
 
-        {msg && <p>{msg}</p>}
-        {payResult && account?.status === "cuenta-pedida" && (
-          <div className="alert green">Cuenta pedida. {account?.payment?.method === "efectivo" ? `Tu cambio es ${mxn(payResult.changeCents)}.` : "El mesero trae la terminal."}</div>
-        )}
-        <p><a href="/dzib/personal">Personal</a></p>
       </main>
+{pedidoOpen && <div className="pedido-backdrop" onClick={() => setPedidoOpen(false)} aria-hidden="true" />}
+      {table && (
+        <button type="button" className="pedido-fab" onClick={() => setPedidoOpen(true)}>
+          🧾 Tu pedido{grandTotal > 0 ? ` · ${mxn(grandTotal)}` : ""}
+        </button>
+      )}
       {/* Botón circular fijo "Asistencia mesero": siempre visible con
           mesa (QR). Llama al mesero; mientras la llamada está pendiente
           muestra "Mesero en camino" y no se puede tocar dos veces. */}

@@ -15,17 +15,19 @@ import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 // - Mesa ACTIVA (cuenta/pedido abierto): ROSA las del lado izquierdo,
 //   AZUL las del lado derecho. Sin actividad: piedra/blanca, solo
 //   contorno.
+// - Cada mesa muestra SOLO su número en grande (1, 2, 3… 10), sin
+//   etiqueta secundaria: la etiqueta es el número mismo.
+// - Cuando cocina marca un platillo como LISTO para recoger, la mesa se
+//   queda PARPADEANDO en su color asignado (rosa izquierda, azul
+//   derecha) hasta que el mesero lo marca entregado o se cierra la
+//   cuenta. El parpadeo es solo visual: las alertas que ya existen
+//   (vibración/sonido/banner) no se tocan.
 // - Arriba de cada mesa va el recuadro con su pedido COMPLETO, con los
 //   mismos datos y acciones que tenía la lista de cuentas: platillos
 //   con estado, indicaciones, pago, Marcar entregado, Avisar a cocina,
 //   alertas y Cerrar cuenta. Nada se pierde.
-// - Mesas 11 y 12 (Mesa 5B y 6B, segundo local) NO se eliminan: van en
-//   una franja compacta debajo del mapa ("Segundo local"), con su mismo
-//   recuadro de pedido y su color de activa (azul, como el lado
-//   derecho), para que ninguna mesa quede fuera de servicio.
-// - El número grande de cada mesa es su POSICIÓN en el salón (1–10);
-//   debajo va siempre su etiqueta real (Mesa 1B, Mesa 2B…), la de los
-//   QR y las cuentas: las posiciones 7–10 son Mesa 1B–4B.
+// - Solo mesas 1–10, sin parte B (decisión del dueño 25 nov 2026): la
+//   franja "Segundo local" (Mesa 5B y 6B) se eliminó.
 // Las alertas se retiran solas cuando el mesero entrega el platillo o
 // atiende la cuenta o la asistencia.
 export default function MeserosView() {
@@ -141,17 +143,15 @@ export default function MeserosView() {
     );
   }
 
-  const tableById = new Map(DZIB_TABLES.map((t) => [t.id, t]));
   // Una celda del mapa: arriba el recuadro del pedido completo (o
-  // "Libre" si la mesa no tiene cuenta) y abajo la mesa dibujada con su
-  // número y sus sillas. Activa: rosa a la izquierda, azul a la derecha.
-  // El número grande es la POSICIÓN en el salón (1–10), como pidió el
-  // dueño; debajo va siempre la etiqueta real de la mesa (Mesa 1B, Mesa
-  // 2B…), que es la que traen los QR y las cuentas: las posiciones 7–10
-  // del mapa son Mesa 1B–4B, y la franja de abajo son Mesa 5B y 6B.
+  // "Libre" si la mesa no tiene cuenta) y abajo la mesa dibujada con
+  // SOLO su número en grande. Activa: rosa a la izquierda, azul a la
+  // derecha. Si algún platillo de la mesa está LISTO para recoger, la
+  // mesa PARPADEA en su color hasta que se marca entregado o se cierra
+  // la cuenta (clase "lista", animación en globals.css).
   function salonCell(id: number, side: "izq" | "der", num: string) {
-    const t = tableById.get(id)!;
     const acc = byTable.get(id);
+    const hasReady = (acc?.items ?? []).some((i: any) => i.status === "listo");
     return (
       <div className="salon-cell" key={id}>
         {acc ? (
@@ -159,14 +159,13 @@ export default function MeserosView() {
         ) : (
           <div className="pedido-libre">Libre</div>
         )}
-        <div className={`mesa-dibujo${acc ? (side === "izq" ? " activa-izq" : " activa-der") : ""}`}>
+        <div className={`mesa-dibujo${acc ? (side === "izq" ? " activa-izq" : " activa-der") : ""}${hasReady ? " lista" : ""}`}>
           <span className="silla s-n" aria-hidden="true" />
           <span className="silla s-s" aria-hidden="true" />
           <span className="silla s-e" aria-hidden="true" />
           <span className="silla s-o" aria-hidden="true" />
           <span className="mesa-redonda">
             <span className="mesa-numero">{num}</span>
-            <span className="mesa-estado">{t.label} · {acc ? `${acc.status} · $${(acc.totalCents / 100).toFixed(0)}` : "Libre"}</span>
           </span>
         </div>
       </div>
@@ -198,7 +197,7 @@ export default function MeserosView() {
       {err && <p className="danger">{err}</p>}
       {!err && accounts.length === 0 && <p className="muted">No hay cuentas abiertas.</p>}
       <h3>Mapa del salón</h3>
-      <p className="muted">Izquierda: mesas 1 a 5 (la 1 abajo). Derecha: mesas 6 a 10 (la 6 arriba). Mesa activa: <b style={{ color: "#be185d" }}>rosa</b> a la izquierda, <b style={{ color: "#1d4ed8" }}>azul</b> a la derecha. Se entra por la puerta de abajo.</p>
+      <p className="muted">Izquierda: mesas 1 a 5 (la 1 abajo). Derecha: mesas 6 a 10 (la 6 arriba). Mesa activa: <b style={{ color: "#be185d" }}>rosa</b> a la izquierda, <b style={{ color: "#1d4ed8" }}>azul</b> a la derecha. Cuando cocina marca un platillo listo, la mesa <b>parpadea</b> en su color hasta que se entrega. Se entra por la puerta de abajo.</p>
       <div className="salon">
         <div className="salon-grid">
           <div className="salon-col">
@@ -217,11 +216,6 @@ export default function MeserosView() {
           </svg>
           <div className="salon-puerta-label">↑ ENTRADA</div>
         </div>
-      </div>
-      <h3>Segundo local — Restaurante 2</h3>
-      <p className="muted">Mesas 5B y 6B, con su pedido completo y su color de activa (azul, como el lado derecho).</p>
-      <div className="salon-strip">
-        {[11, 12].map((id) => salonCell(id, "der", tableById.get(id)!.label.replace("Mesa ", "")))}
       </div>
       <p><a href="/dzib">Volver al menú</a> · <a href="/dzib/personal">Personal</a></p>
     </main>

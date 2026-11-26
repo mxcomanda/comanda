@@ -152,13 +152,36 @@ button { cursor: pointer; }
 .notes-line { font-weight: 800; color: #7a1503; margin: 4px 0; }
 .detail-line { font-weight: 700; color: var(--burnt); }
 
-/* ---------- Barra superior fija de "Tu pedido" (comensal) ---------- */
-.dzib-topbar { position: sticky; top: 0; z-index: 60; background: var(--dzib-ink); color: #f5efe0; border-bottom: 3px solid var(--gold); }
-.dzib-topbar-inner { max-width: 1080px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
-.dzib-topbar .badge { background: var(--gold); color: var(--dzib-ink); border-color: var(--gold); }
-.topbar-summary { flex: 1; display: flex; gap: 14px; flex-wrap: wrap; min-width: 200px; }
-.topbar-corrida { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.topbar-total { color: var(--yellow); font-size: 16px; white-space: nowrap; }
+/* ---------- Panel "Tu pedido" a la derecha (comensal) ---------- */
+/* En pantallas anchas el pedido vive FIJO en una columna lateral
+   derecha (sticky) y el menú ocupa el resto; la mesa y el total viven
+   dentro del propio panel (la barra superior fija se quitó). En
+   celular la columna se esconde y se abre como hoja superpuesta con
+   el botón flotante "Tu pedido" (abajo a la IZQUIERDA, para no chocar
+   con el botón circular de asistencia, que está a la derecha). */
+.dzib-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+.dzib-menu-col { min-width: 0; }
+.dzib-pedido-aside { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.pedido-aside-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 18px; margin-bottom: 10px; }
+.pedido-aside-total { margin-left: auto; font-weight: 900; color: var(--burnt); }
+.pedido-close { display: none; }
+.pedido-fab { display: none; }
+.pedido-backdrop { display: none; }
+@media (max-width: 899px) {
+  .dzib-layout { display: block; }
+  .dzib-pedido-aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(92vw, 420px); max-height: none; z-index: 95; background: #fffdf6; border-left: 3px solid var(--dzib-ink); box-shadow: -6px 0 0 rgba(0, 0, 0, .15); padding: 16px; overflow-y: auto; transform: translateX(105%); transition: transform .2s ease; }
+  .dzib-pedido-aside.abierto { transform: translateX(0); }
+  .pedido-close { display: inline-block; margin-left: auto; }
+  .pedido-fab { display: block; position: fixed; left: 18px; bottom: 18px; z-index: 80; min-height: 56px; padding: 12px 20px; border: 3px solid var(--dzib-ink); border-radius: 999px; background: var(--gold); color: var(--dzib-ink); font-weight: 900; box-shadow: 4px 4px 0 var(--dzib-ink); }
+  .pedido-backdrop { display: block; position: fixed; inset: 0; z-index: 90; background: rgba(0, 0, 0, .45); }
+}
+/* Botón de pedir a cocina: parpadea en cuanto hay algo en espera
+   listo para pedirse (desayunos/extras elegidos, o un tiempo elegido
+   cuando la comida está visible). Al pedirlo, el botón deja de
+   existir (extras) o de parpadear (tiempo), porque ya no hay nada
+   en espera. Solo pulsa un anillo dorado: el texto sigue legible. */
+@keyframes pedir-parpadeo { 0%, 100% { box-shadow: 5px 5px 0 var(--dzib-ink); } 50% { box-shadow: 5px 5px 0 var(--dzib-ink), 0 0 0 8px rgba(201, 162, 39, .55); } }
+.dzib .big-btn.parpadea-pedir { animation: pedir-parpadeo 1s ease-in-out infinite; }
 /* ---------- Pestañas de corridas (qué corrida se está armando) ---------- */
 .corrida-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
 .corrida-tabs button { border-radius: 999px; padding: 8px 16px; font-weight: 800; background: #fff; }
@@ -197,6 +220,12 @@ button { cursor: pointer; }
 .dzib .mesa-dibujo.activa-izq .mesa-numero { color: #831843; }
 .dzib .mesa-dibujo.activa-der .mesa-redonda { background: #93c5fd; border-color: #1d4ed8; }
 .dzib .mesa-dibujo.activa-der .mesa-numero { color: #172554; }
+/* Mesa con un platillo LISTO para recoger: parpadea en su color asignado
+   (rosa izquierda, azul derecha) hasta que el mesero lo marca entregado
+   o se cierra la cuenta. Solo parpadea la mesa dibujada; las alertas de
+   vibración/sonido/banner que ya existen no se tocan. */
+@keyframes mesa-lista { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+.dzib .mesa-dibujo.lista .mesa-redonda { animation: mesa-lista 1s ease-in-out infinite; }
 .dzib .silla { position: absolute; width: 16px; height: 16px; border: 2px solid var(--dzib-ink); border-radius: 4px; background: #fffdf6; }
 .dzib .silla.s-n { top: 4px; left: 50%; margin-left: -8px; }
 .dzib .silla.s-s { bottom: 4px; left: 50%; margin-left: -8px; }
@@ -204,7 +233,20 @@ button { cursor: pointer; }
 .dzib .silla.s-o { left: 2px; top: 50%; margin-top: -8px; }
 .dzib .salon-puerta { width: 190px; margin: 4px auto -3px; background: #f5efe0; text-align: center; padding: 2px 0 0; }
 .dzib .salon-puerta-label { font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: .22em; color: var(--dzib-ink); margin-top: -8px; padding-bottom: 6px; }
-.dzib .salon-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+
+/* ---------- Cocina: tipografía 20% más grande (decisión del dueño) ---------- */
+/* Solo /dzib/cocina: el main lleva la clase "cocina". La base del
+   navegador es 16px, así que 19.2px = +20%; los botones y el texto que
+   heredan la fuente escalan solos. Los tamaños fijos en px se escalan
+   uno por uno: h2 28→33.6, notes-box 17→20.4, status-pill 12→14.4,
+   alert-banner y alert-enable 17/16→20.4/19.2. El resto de la app no
+   se toca. */
+.cocina { font-size: 19.2px; }
+.cocina h2 { font-size: 33.6px; }
+.cocina .notes-box { font-size: 20.4px; }
+.cocina .status-pill { font-size: 14.4px; }
+.cocina .alert-banner { font-size: 20.4px; }
+.cocina .alert-enable { font-size: 19.2px; }
 
 /* ---------- Botón circular fijo "Asistencia mesero" (comensal) ---------- */
 .dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 96px; height: 96px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 4px 4px 0 var(--dzib-ink); font-weight: 900; font-size: 13px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; }

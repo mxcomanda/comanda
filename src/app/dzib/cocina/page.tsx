@@ -5,11 +5,15 @@ import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Cocina: solo los platillos que el comensal ya pidió (los tiempos en
 // espera NO aparecen). Cada platillo avanza: Recibido → En preparación →
-// Listo para recoger (avisa al mesero) → Entregado. Se actualiza cada 5 s.
+// Listo para recoger (avisa al mesero) → Marcar como entregado: al
+// pulsarlo el platillo DESAPARECE de la lista (ya está entregado, no
+// tiene nada que hacer aquí). Se actualiza cada 5 s.
+// Tipografía 20% más grande que el resto de la app (clase "cocina" en
+// el main, reglas en globals.css), por decisión del dueño.
 const NEXT_LABEL: Record<string, string> = {
   pendiente: "Empezar a preparar",
   preparando: "Marcar listo para recoger",
-  listo: "Marcar entregado",
+  listo: "Marcar como entregado",
 };
 
 export default function CocinaView() {
@@ -75,7 +79,7 @@ export default function CocinaView() {
     (byTable[key] ??= []).push(i);
   }
   return (
-    <main className="wrap">
+    <main className="wrap cocina">
       <h2>Dzib — Cocina</h2>
       <p className="muted">Solo platillos pedidos (los tiempos en espera no aparecen hasta que el comensal los pide). Las indicaciones que el comensal ya escribió para los próximos tiempos se ven abajo en “Próximos tiempos”. Se actualiza cada 5 segundos.</p>
       <StaffAlertUI alerts={staffAlerts} />

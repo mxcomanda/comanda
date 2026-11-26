@@ -18,7 +18,7 @@ export interface BreakfastItem {
 export const DZIB_SETTINGS = {
   breakfastPriceCents: 8200, // sencillos $82
   breakfastSpecialPriceCents: 9200, // especiales $92
-  guisadoDelDia: "Pollo a la pibil",
+  guisadoDelDia: "Guisado (preguntar por disponibilidad)", // genérico, sin platillo fijo (decisión del dueño 25 nov 2026)
   guisadoPriceCents: 7800, // guisados $78
   defaultSencilloPriceCents: 9100, // comida sencillo $91 (hoja 20 nov 2026)
   defaultSpecialPriceCents: 7800, // menú de $78 (hoja 20 nov 2026)
@@ -35,13 +35,16 @@ export const DZIB_TABLES = [
   { id: 4, label: "Mesa 4", zone: "restaurante-1" },
   { id: 5, label: "Mesa 5", zone: "restaurante-1" },
   { id: 6, label: "Mesa 6", zone: "restaurante-1" },
-  { id: 7, label: "Mesa 1B", zone: "restaurante-2" },
-  { id: 8, label: "Mesa 2B", zone: "restaurante-2" },
-  { id: 9, label: "Mesa 3B", zone: "restaurante-2" },
-  { id: 10, label: "Mesa 4B", zone: "restaurante-2" },
-  { id: 11, label: "Mesa 5B", zone: "restaurante-2" },
-  { id: 12, label: "Mesa 6B", zone: "restaurante-2" },
+  { id: 7, label: "Mesa 7", zone: "restaurante-1" },
+  { id: 8, label: "Mesa 8", zone: "restaurante-1" },
+  { id: 9, label: "Mesa 9", zone: "restaurante-1" },
+  { id: 10, label: "Mesa 10", zone: "restaurante-1" },
 ];
+// Mesas 1–10, sin parte B (decisión del dueño 25 nov 2026): las mesas
+// 1B–6B se eliminaron. Los QR viejos de mesa=11 y mesa=12 ya no abren
+// una mesa válida: /dzib no encuentra la mesa y /api/dzib/order
+// devuelve 400 "Mesa no válida". En Neon hay que renombrar las mesas
+// 7–10 y desactivar la 11–12 (ver informe del despliegue).
 
 export const DZIB_BREAKFAST: BreakfastItem[] = [
   // Sencillos $82 — incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano)
