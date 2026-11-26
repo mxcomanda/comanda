@@ -74,6 +74,9 @@ export function ensureColumns(): Promise<void> {
       await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS kitchen_alert BOOLEAN DEFAULT false`;
       // El mesero cerró la mesa ("Liberar mesa"): caja recibe el aviso.
       await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS closed_by_mesero BOOLEAN DEFAULT false`;
+      // Propina dejada por el cliente (solo con tarjeta, la escribe Caja
+      // al cerrar la cuenta). Se guarda separada del total de comida.
+      await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS tip_cents INT DEFAULT 0`;
       // Grupo de comida corrida al que pertenece cada platillo (1, 2…).
       await sql`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS corrida INT`;
       // Indicaciones especiales por platillo/tiempo y detalle elegido
@@ -122,7 +125,7 @@ function tableLabel(tableId: number): string {
 export async function getAccountWithItems(accountId: string): Promise<Account | null> {
   await ensureColumns();
   if (!isUuid(accountId)) return null;
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts WHERE id = ${accountId}::uuid`;
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, tip_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts WHERE id = ${accountId}::uuid`;
   if (rows.length === 0) return null;
   const a = rows[0];
   const items = await getItems(String(a.id));
@@ -148,6 +151,7 @@ function rowToAccount(a: Record<string, unknown>, items: OrderItem[]): Account {
     id: String(a.id), tableId: a.table_id as number, tableLabel: tableLabel(a.table_id as number),
     items, totalCents: computeTotal(items), status: (a.status as Account["status"]) ?? "abierta",
     payment: a.payment_method ? { method: a.payment_method as "terminal" | "efectivo", cashCents: (a.cash_cents as number) ?? undefined } : null,
+    tipCents: (a.tip_cents as number) ?? 0,
     changeReady: Boolean(a.change_ready), kitchenAlert: Boolean(a.kitchen_alert),
     closedByMesero: Boolean(a.closed_by_mesero),
     createdAt: a.created_at instanceof Date ? a.created_at.toISOString() : String(a.created_at ?? ""),
@@ -156,7 +160,7 @@ function rowToAccount(a: Record<string, unknown>, items: OrderItem[]): Account {
 
 export async function getOrCreateAccount(tableId: number): Promise<Account> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, tip_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length > 0) {
     const items = await getItems(String(rows[0].id));
@@ -168,7 +172,7 @@ export async function getOrCreateAccount(tableId: number): Promise<Account> {
 
 export async function getOpenAccountByTable(tableId: number): Promise<Account | null> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, tip_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} AND table_id = ${tableId} AND status <> 'cerrada' ORDER BY created_at DESC LIMIT 1`;
   if (rows.length === 0) return null;
   return rowToAccount(rows[0], await getItems(String(rows[0].id)));
@@ -280,7 +284,7 @@ export async function getWaitingNotes(): Promise<(OrderItem & { table: string; a
 
 export async function getAllAccounts(): Promise<Account[]> {
   await ensureColumns();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, tip_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT} ORDER BY created_at DESC LIMIT 50`;
   const out: Account[] = [];
   for (const a of rows) out.push(rowToAccount(a, await getItems(String(a.id))));
@@ -300,6 +304,7 @@ export function ensureDayCutSchema(): Promise<void> {
   if (!dayCutSchemaPromise) {
     dayCutSchemaPromise = (async () => {
       await sql`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cut_date DATE`;
+      await sql`ALTER TABLE daily_cuts ADD COLUMN IF NOT EXISTS tip_cents INT DEFAULT 0`;
       await sql`CREATE TABLE IF NOT EXISTS daily_cuts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         restaurant_slug TEXT NOT NULL,
@@ -330,6 +335,7 @@ function cutRowToCut(r: Record<string, unknown>): DayCut {
     closedAt: r.closed_at instanceof Date ? r.closed_at.toISOString() : String(r.closed_at),
     perTable, totalOrders: (r.total_orders as number) ?? 0, totalCents, cashCents, cardCents,
     unclassifiedCents: totalCents - cashCents - cardCents,
+    tipCents: (r.tip_cents as number) ?? 0,
     openAccounts, openAccountsClosed: openAccounts,
     // Las cerradas sin cobrar del corte ya vienen en openAccountsClosed.
     closedUnpaid: [],
@@ -347,7 +353,7 @@ export async function getTodayCut(): Promise<DayCut | null> {
 export async function getDayData(): Promise<{ summary: DaySummary; cut: DayCut | null }> {
   await ensureDayCutSchema();
   const date = mexicoDateString();
-  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
+  const { rows } = await sql`SELECT id, table_id, status, payment_method, cash_cents, tip_cents, change_ready, kitchen_alert, closed_by_mesero, created_at FROM accounts
     WHERE restaurant_slug = ${RESTAURANT}
     AND (created_at AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date
     AND cut_date IS NULL ORDER BY created_at ASC`;
@@ -382,9 +388,9 @@ export async function saveDayCut(): Promise<{ cut: DayCut } | { error: string; c
   // 3) Guardar el corte (UNIQUE por día: si dos personas cortan a la
   // vez, la segunda recibe el corte ya guardado en vez de duplicarlo).
   try {
-    const inserted = await sql`INSERT INTO daily_cuts (restaurant_slug, cut_date, total_orders, total_cents, cash_cents, card_cents, per_table, open_accounts)
-      VALUES (${RESTAURANT}, (now() AT TIME ZONE 'America/Mexico_City')::date, ${summary.totalOrders}, ${summary.totalCents}, ${summary.cashCents}, ${summary.cardCents}, ${JSON.stringify(summary.perTable)}::jsonb, ${JSON.stringify(openClosed)}::jsonb)
-      RETURNING id, cut_date, closed_at, total_orders, total_cents, cash_cents, card_cents, per_table, open_accounts`;
+    const inserted = await sql`INSERT INTO daily_cuts (restaurant_slug, cut_date, total_orders, total_cents, cash_cents, card_cents, tip_cents, per_table, open_accounts)
+      VALUES (${RESTAURANT}, (now() AT TIME ZONE 'America/Mexico_City')::date, ${summary.totalOrders}, ${summary.totalCents}, ${summary.cashCents}, ${summary.cardCents}, ${summary.tipCents}, ${JSON.stringify(summary.perTable)}::jsonb, ${JSON.stringify(openClosed)}::jsonb)
+      RETURNING id, cut_date, closed_at, total_orders, total_cents, cash_cents, card_cents, tip_cents, per_table, open_accounts`;
     return { cut: cutRowToCut(inserted.rows[0]) };
   } catch {
     const again = await getTodayCut();
@@ -425,10 +431,12 @@ export async function getMenuFromDb() {
 }
 
 // ---------- Estados, cobro y avisos (cadena cocina → mesero → caja) ----------
+// Cocina avanza: pendiente → preparando → listo. La entrega NO la marca
+// cocina: un platillo listo se queda en "listo" hasta que el MESERO lo
+// marca entregado desde su vista (allí desaparece de cocina).
 const NEXT_STATUS: Record<string, string> = {
   pendiente: "preparando",
   preparando: "listo",
-  listo: "entregado",
 };
 
 export async function advanceItemStatus(itemId: string): Promise<{ status: string } | { error: string }> {
@@ -462,6 +470,41 @@ export async function setAccountStatus(accountId: string, status: string): Promi
   if (!isUuid(accountId)) return null;
   await sql`UPDATE accounts SET status = ${status} WHERE id = ${accountId}::uuid`;
   return getAccountWithItems(accountId);
+}
+
+// Cierre CON PAGO por Caja (única forma de liberar una mesa desde el
+// cambio de flujo del 25 nov 2026): Caja señala el método (Tarjeta o
+// Efectivo) y, con tarjeta, la propina. La cuenta queda cerrada CON
+// método de pago, así el resumen del día la cuenta como ganada (las
+// cerradas sin método aparecen como "cerradas sin cobrar"). Con
+// efectivo se conserva el cash_cents que el comensal ya registró al
+// pedir la cuenta; con tarjeta el efectivo queda en NULL. La propina
+// solo se guarda con tarjeta (con efectivo es 0).
+export async function closeAccountPaid(accountId: string, method: "terminal" | "efectivo", tipCents: number, cashCents?: number): Promise<Account | null> {
+  await ensureColumns();
+  if (!isUuid(accountId)) return null;
+  const tip = Math.max(0, Math.floor(tipCents) || 0);
+  await sql`UPDATE accounts SET status = 'cerrada', payment_method = ${method},
+    tip_cents = ${method === "terminal" ? tip : 0},
+    cash_cents = CASE WHEN ${method} = 'efectivo' THEN COALESCE(${cashCents ?? null}, cash_cents) ELSE NULL END
+    WHERE id = ${accountId}::uuid`;
+  return getAccountWithItems(accountId);
+}
+
+// Propinas del día (sin cortar) por lado del salón, para la vista de
+// meseros: izquierda = mesas 1–5, derecha = mesas 6–10.
+export async function getTipsBySide(): Promise<{ left: number; right: number }> {
+  await ensureColumns();
+  const { rows } = await sql`SELECT table_id, COALESCE(SUM(tip_cents), 0) AS tips FROM accounts
+    WHERE restaurant_slug = ${RESTAURANT}
+    AND (created_at AT TIME ZONE 'America/Mexico_City')::date = (now() AT TIME ZONE 'America/Mexico_City')::date
+    AND cut_date IS NULL AND tip_cents > 0 GROUP BY table_id`;
+  let left = 0, right = 0;
+  for (const r of rows) {
+    const t = Number(r.tips ?? 0);
+    if ((r.table_id as number) <= 5) left += t; else right += t;
+  }
+  return { left, right };
 }
 
 // Cierre por el mesero ("Liberar mesa"): la cuenta queda cerrada, la

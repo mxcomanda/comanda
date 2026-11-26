@@ -5,15 +5,16 @@ import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Cocina: solo los platillos que el comensal ya pidió (los tiempos en
 // espera NO aparecen). Cada platillo avanza: Recibido → En preparación →
-// Listo para recoger (avisa al mesero) → Marcar como entregado: al
-// pulsarlo el platillo DESAPARECE de la lista (ya está entregado, no
-// tiene nada que hacer aquí). Se actualiza cada 5 s.
+// Listo para recoger (avisa al mesero). Cuando un platillo queda listo,
+// su botón cambia a VERDE y dice "En espera del mesero": cocina ya no
+// hace nada más con él; se queda visible en la lista hasta que el
+// MESERO lo marca entregado desde su vista, y en ese momento desaparece
+// de aquí. Se actualiza cada 5 s.
 // Tipografía 20% más grande que el resto de la app (clase "cocina" en
 // el main, reglas en globals.css), por decisión del dueño.
 const NEXT_LABEL: Record<string, string> = {
   pendiente: "Empezar a preparar",
   preparando: "Marcar listo para recoger",
-  listo: "Marcar como entregado",
 };
 
 export default function CocinaView() {
@@ -108,6 +109,8 @@ export default function CocinaView() {
               <span>
                 {NEXT_LABEL[i.status] ? (
                   <button type="button" className="staff-btn" onClick={() => advance(i.id)}>{NEXT_LABEL[i.status]}</button>
+                ) : i.status === "listo" ? (
+                  <button type="button" className="staff-btn" disabled style={{ background: "#16a34a", color: "#fff", borderColor: "#16a34a", cursor: "default", opacity: 1 }}>En espera del mesero</button>
                 ) : <span className="status-pill entregado">Entregado ✓</span>}
               </span>
             </div>

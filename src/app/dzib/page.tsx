@@ -291,7 +291,12 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // los tiempos que le faltan, así que no se le exige completarlos para
   // pagar el total que Caja ve. Con la comida visible, se exige lo de
   // siempre (todos los tiempos pedidos).
-  const showPay = Boolean(accountId) && account?.status === "abierta" && extras.length === 0 &&
+  // El total y el método de pago (Pagar) solo se despliegan cuando
+  // TODO lo pedido ya se entregó: ningún ítem en espera, pendiente,
+  // preparando ni listo. Si el comensal pide algo más después, se
+  // vuelve a ocultar hasta que lo nuevo también se entregue.
+  const allDelivered = accItems.length > 0 && accItems.every((i) => i.status === "entregado" || i.status === "cancelado");
+  const showPay = Boolean(accountId) && account?.status === "abierta" && extras.length === 0 && allDelivered &&
     (corridasWithDishes.length > 0 ? (lunchVisible ? allCorridasRequested : true) : (extrasSent || sentExtras.length > 0));
 
   // ---- Acciones ----
@@ -437,7 +442,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       if (!res.ok) { const d = await res.json().catch(() => null); setMsg(d?.error ?? "No se pudo enviar"); return; }
     }
     setExtras([]); setExtrasSent(true);
-    setMsg("Pedido por separado enviado a cocina.");
     fetchAccount(id);
   }
   async function pagar() {
@@ -515,7 +519,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const pagarPanel = showPay ? (
     <div className="card" style={{ marginTop: 14 }}>
       <b>Pagar — Total de tu cuenta: {mxn(accountTotal)}</b>
-      <p className="muted">Un solo pago por todo: tus comidas, tus desayunos y lo por separado.</p>
       <div className="pay-row">
         <button type="button" className={payMethod === "terminal" ? "active" : ""} onClick={() => setPayMethod("terminal")}>💳 Tarjeta (terminal)</button>
         <button type="button" className={payMethod === "efectivo" ? "active" : ""} onClick={() => setPayMethod("efectivo")}>💵 Efectivo</button>
@@ -543,43 +546,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     </div>
   ) : null;
 
-  const statusPanel = accountId ? (
-    <div className="card" style={{ marginTop: 14 }}>
-      <b>Estado de tu pedido — {account?.tableLabel}</b>
-      {allCorridaIds.map((id) => (
-        <div key={id}>
-          <h3 style={{ marginTop: 12 }}>Comida {id}</h3>
-          {TIEMPOS.map((t) => {
-            const item = accItems.find((i) => i.tiempo === t && i.kind !== "agua" && corridaOf(i) === id);
-            const name = item?.name ?? selFor(id)[t]?.name;
-            return (
-              <div key={t}>
-                <div className="item"><span>{TIEMPO_LABEL[t]}{name ? ` · ${name}` : ""}{item?.detail ? <span className="detail-line"> · {item.detail}</span> : ""}</span><span className={`status-pill ${item?.status ?? "espera"}`}>{tiempoStatus(t, id)}</span></div>
-                {item?.notes && <p className="notes-line">⚠ Indicaciones: {item.notes}</p>}
-              </div>
-            );
-          })}
-          {accItems.filter((i) => i.kind === "agua" && corridaOf(i) === id).map((i) => (
-            <div key={i.id}>
-              <div className="item"><span>Agua del día · {i.name.replace("Agua del día — ", "")}{i.qty > 1 ? ` ×${i.qty}` : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
-            </div>
-          ))}
-        </div>
-      ))}
-      {sentExtras.map((i) => (
-        <div key={i.id}>
-          <div className="item"><span>{i.name} ({i.group === "desayuno" ? "Desayunos" : "por separado"}){i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}</span><span className={`status-pill ${i.status}`}>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
-          {i.notes && <p className="notes-line">⚠ Indicaciones: {i.notes}</p>}
-        </div>
-      ))}
-      <p><b>Total de tu cuenta: {mxn(accountTotal)}</b></p>
-      <p> Pago: {account?.status === "cuenta-pedida" ? "Cuenta pedida — esperando a caja" : account?.status === "pagada" ? "Pagado ✓" : account?.status === "cerrada" ? "Cuenta cerrada" : "Pendiente (paga cuando termines tus tiempos)"}</p>
-      {changeReady && <div className="alert green">¡Tu cambio ya está listo! El mesero va en camino con tu cambio.</div>}
-      {account?.status === "cuenta-pedida" && account?.payment?.method === "efectivo" && !changeReady && (
-        <p className="muted">Caja está preparando tu cambio de {mxn((account.payment.cashCents ?? 0) - accountTotal)}. Te avisamos aquí cuando esté listo.</p>
-      )}
-    </div>
-  ) : null;
 
   return (
     <div className="dzib">
@@ -873,7 +839,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         </div>
 
         {pagarPanel}
-        {statusPanel}
         </aside>
 
       </main>

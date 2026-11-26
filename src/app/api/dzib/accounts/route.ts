@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { verifySessionRoles, type Role } from "@/lib/auth";
 import { db, accountTotal } from "@/lib/store";
-import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountByMesero, setChangeReady, setKitchenAlert, getDayData, saveDayCut, getOpenAssistanceCalls, attendAssistance } from "@/lib/pg";
+import { hasPostgres, getAllAccounts, getAccountWithItems, setItemStatus, setAccountStatus, closeAccountPaid, getTipsBySide, setChangeReady, getDayData, saveDayCut, getOpenAssistanceCalls, attendAssistance } from "@/lib/pg";
 import { computeDaySummary, mexicoDateString, type DayCut } from "@/lib/daySummary";
 
 function roleOf(req: Request): Role[] {
@@ -19,19 +19,29 @@ export async function GET(req: Request) {
   if (hasPostgres) {
     const accounts = await getAllAccounts();
     const assistance = await getOpenAssistanceCalls();
+    // Propinas del día por lado del salón (meseros las ven arriba del
+    // mapa): izquierda = mesas 1–5, derecha = mesas 6–10.
+    const tips = await getTipsBySide();
     if (role === "caja") {
       const { summary, cut } = await getDayData();
-      return NextResponse.json({ role, roles, accounts, assistance, summary, cut });
+      return NextResponse.json({ role, roles, accounts, assistance, tips, summary, cut });
     }
-    return NextResponse.json({ role, roles, accounts, assistance });
+    return NextResponse.json({ role, roles, accounts, assistance, tips });
+  }
+  const date = mexicoDateString();
+  const tips = { left: 0, right: 0 };
+  for (const a of db.accounts) {
+    if (!(a.tipCents ?? 0)) continue;
+    if (a.cutDate) continue;
+    if (a.createdAt && mexicoDateString(new Date(a.createdAt)) !== date) continue;
+    if (a.tableId <= 5) tips.left += a.tipCents ?? 0; else tips.right += a.tipCents ?? 0;
   }
   if (role === "caja") {
-    const date = mexicoDateString();
     const summary = computeDaySummary(db.accounts, date);
     const cut = db.dayCuts.find((c) => c.date === date) ?? null;
-    return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance, summary, cut });
+    return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance, tips, summary, cut });
   }
-  return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance });
+  return NextResponse.json({ role, roles, accounts: db.accounts, assistance: db.assistance, tips });
 }
 
 // Acciones del personal sobre las cuentas. Meseros: marcar entregado y
@@ -107,30 +117,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Platillo no encontrado" }, { status: 404 });
   }
 
-  if (action === "call-kitchen") {
-    if (hasPostgres) { await setKitchenAlert(accountId, true); return NextResponse.json({ ok: true, message: "Cocina avisada." }); }
-    const acc = db.accounts.find((a) => a.id === accountId);
-    if (acc) (acc as any).kitchenAlert = true;
-    return NextResponse.json({ ok: true, message: "Cocina avisada." });
-  }
-
-  // Cierre por el mesero ("Liberar mesa"): el mesero cierra la cuenta de
-  // su mesa para que entren nuevos comensales. La mesa queda libre y
-  // caja recibe el aviso (closedByMesero). Si hay platillos sin entregar
-  // o la cuenta no está pagada, el cliente pide confirmación antes de
-  // llamar aquí; el servidor no bloquea el cierre, solo lo registra.
-  if (action === "close" && roles.includes("mesero")) {
-    if (hasPostgres) {
-      const acc = await closeAccountByMesero(accountId);
-      if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-      return NextResponse.json({ ok: true, account: acc });
-    }
-    const a = db.accounts.find((x) => x.id === accountId);
-    if (!a) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
-    a.status = "cerrada";
-    (a as any).closedByMesero = true;
-    return NextResponse.json({ ok: true, account: a });
-  }
+  // Los meseros YA NO cierran cuentas ni avisan a cocina (decisión del
+  // dueño 25 nov 2026): solo Caja libera las mesas, con el flujo de
+  // pago (close-paid). La entrega la marca el mesero con "deliver".
 
   // Solo Caja a partir de aquí.
   if (!roles.includes("caja")) return NextResponse.json({ error: "Solo Caja puede hacer eso" }, { status: 403 });
@@ -144,6 +133,30 @@ export async function POST(req: Request) {
     }
     if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
     return NextResponse.json({ ok: true, account: acc });
+  }
+  // Cierre CON PAGO por Caja (única forma de liberar una mesa desde el
+  // cambio de flujo del 25 nov 2026): Caja ya señaló el método (Tarjeta
+  // o Efectivo) y, con tarjeta, la propina. La cuenta queda cerrada CON
+  // método de pago, así entra en el total ganado del día (una cerrada
+  // sin método quedaría como "cerrada sin cobrar"). La propina solo se
+  // guarda con tarjeta; con efectivo es 0. Con efectivo se conserva el
+  // cash_cents que el comensal registró al pedir la cuenta.
+  if (action === "close-paid") {
+    const method = body?.method as "terminal" | "efectivo";
+    if (method !== "terminal" && method !== "efectivo")
+      return NextResponse.json({ error: "Falta el método de pago (Tarjeta o Efectivo)" }, { status: 400 });
+    const tipCents = method === "terminal" ? Math.max(0, Math.floor(Number(body?.tipCents) || 0)) : 0;
+    if (hasPostgres) {
+      const acc = await closeAccountPaid(accountId, method, tipCents);
+      if (!acc) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+      return NextResponse.json({ ok: true, account: acc });
+    }
+    const a = db.accounts.find((x) => x.id === accountId);
+    if (!a) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
+    a.payment = { method, cashCents: method === "efectivo" ? a.payment?.cashCents : undefined };
+    a.tipCents = tipCents;
+    a.status = "cerrada";
+    return NextResponse.json({ ok: true, account: a });
   }
   if (action === "change-ready") {
     const ready = body?.ready !== false;

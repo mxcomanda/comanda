@@ -5,15 +5,24 @@ import { mexicoTimeString } from "@/lib/daySummary";
 import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 
 // Caja: todas las cuentas con su total, método de pago, efectivo y cambio,
-// y botones para confirmar el pago, marcar el cambio listo (avisa al
-// mesero) y cerrar la cuenta. Se actualiza cada 5 s. Además: resumen del
-// día por mesa y corte final del día (solo rol Caja).
+// y el flujo de cobro: Caja señala Tarjeta o Efectivo (y con tarjeta la
+// propina) y SOLO DESPUÉS aparece "Cerrar cuenta", que cierra la cuenta
+// con su método y su propina y libera la mesa. Solo Caja libera mesas:
+// los meseros ya no cierran cuentas. Se actualiza cada 5 s. Además:
+// resumen del día por mesa (con las propinas separadas) y corte final
+// del día (solo rol Caja).
 export default function CajaView() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [showCutReview, setShowCutReview] = useState(false);
   const [cutBusy, setCutBusy] = useState(false);
+  // Método señalado por Caja para cerrar cada cuenta (Tarjeta/Efectivo)
+  // y propina escrita (solo tarjeta). Caja DEBE pulsar el método: aunque
+  // el comensal ya eligió uno al pedir la cuenta, el botón de cerrar
+  // solo aparece después de que Caja lo confirma aquí.
+  const [cajaMethod, setCajaMethod] = useState<Record<string, "terminal" | "efectivo">>({});
+  const [cajaTip, setCajaTip] = useState<Record<string, string>>({});
   const staffAlerts = useStaffAlerts();
   function load() {
     fetch("/api/dzib/accounts").then(async (r) => {
@@ -32,6 +41,25 @@ export default function CajaView() {
   const summary = data?.summary;
   const cut = data?.cut;
   const isCaja = data?.role === "caja";
+  // Una cuenta se puede cobrar y cerrar cuando el comensal ya pidió la
+  // cuenta, o cuando todo lo pedido ya se entregó (aunque todavía no la
+  // haya pedido). Con platillos sin entregar no se cobra ni se cierra.
+  const allDelivered = (a: any) => (a.items?.length ?? 0) > 0 && a.items.every((i: any) => i.status === "entregado" || i.status === "cancelado");
+  // Cerrar CON PAGO: registra el método señalado (y la propina con
+  // tarjeta) y cierra la cuenta, liberando la mesa.
+  async function cerrarConPago(a: any) {
+    const method = cajaMethod[a.id];
+    if (!method) return;
+    const tipCents = method === "terminal" ? Math.max(0, Math.round(Number(cajaTip[a.id] ?? "0") * 100)) : 0;
+    const res = await fetch("/api/dzib/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "close-paid", accountId: a.id, method, tipCents }) });
+    const d = await res.json().catch(() => null);
+    setMsg(res.ok ? "Cuenta cerrada y mesa liberada." : (d?.error ?? "No se pudo cerrar la cuenta"));
+    if (res.ok) {
+      setCajaMethod((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
+      setCajaTip((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
+    }
+    load();
+  }
   async function hacerCorte() {
     if (!window.confirm("¿Seguro que quieres hacer el corte final del día?")) return;
     setCutBusy(true);
@@ -82,6 +110,7 @@ export default function CajaView() {
               </div>
             ) : <div className="muted">Sin pagar todavía.</div>}
             {a.closedByMesero && <div className="muted">🔓 Liberada por el mesero — lista para nuevos comensales.</div>}
+            {(a.tipCents ?? 0) > 0 && <div className="muted">💰 Propina: ${(a.tipCents / 100).toFixed(0)}</div>}
             {a.items?.map((i: any) => (
               <div key={i.id}>
                 <div className="item"><span>{i.name}{i.qty > 1 ? ` ×${i.qty}` : ""}{i.detail ? <span className="detail-line"> · {i.detail}</span> : ""}{i.tiempo ? ` · ${i.tiempo} (Comida ${i.corrida ?? 1})` : (i.kind === "agua" && i.corrida ? ` · Comida ${i.corrida}` : "")}</span><span>{STATUS_LABEL[i.status as keyof typeof STATUS_LABEL] ?? i.status}</span></div>
@@ -89,16 +118,29 @@ export default function CajaView() {
               </div>
             ))}
             <p>
-              {a.status === "cuenta-pedida" && (
-                <button type="button" className="staff-btn" onClick={() => post("confirm-pay", { accountId: a.id })}>Confirmar pago</button>
-              )}
               {a.payment?.method === "efectivo" && a.status !== "cerrada" && (
                 <button type="button" className="staff-btn" onClick={() => post("change-ready", { accountId: a.id, ready: !a.changeReady })}>{a.changeReady ? "Quitar cambio listo" : "Marcar cambio listo"}</button>
               )}
-              {a.status !== "cerrada" && (
-                <button type="button" className="staff-btn" onClick={() => post("close-caja", { accountId: a.id })}>Cerrar cuenta</button>
-              )}
             </p>
+            {a.status !== "cerrada" && (a.status === "cuenta-pedida" || (a.status === "abierta" && allDelivered(a))) && (
+              <div className="card" style={{ marginTop: 10 }}>
+                <b>Cobrar y cerrar cuenta</b>
+                <p className="muted">Señala el método de pago. Solo después aparece el botón de cerrar cuenta y se libera la mesa.</p>
+                <div className="pay-row">
+                  <button type="button" className={cajaMethod[a.id] === "terminal" ? "active" : ""} onClick={() => { setCajaMethod((prev) => ({ ...prev, [a.id]: "terminal" })); setCajaTip((prev) => ({ ...prev, [a.id]: prev[a.id] ?? "0" })); }}>💳 Tarjeta</button>
+                  <button type="button" className={cajaMethod[a.id] === "efectivo" ? "active" : ""} onClick={() => setCajaMethod((prev) => ({ ...prev, [a.id]: "efectivo" }))}>💵 Efectivo</button>
+                </div>
+                {!cajaMethod[a.id] && a.payment?.method && <p className="muted">El comensal eligió: {a.payment.method === "terminal" ? "Tarjeta (terminal)" : "Efectivo"} — confírmalo pulsando el botón.</p>}
+                {cajaMethod[a.id] === "terminal" && (
+                  <label>Propina
+                    <input inputMode="decimal" placeholder="0" value={cajaTip[a.id] ?? "0"} onChange={(e) => setCajaTip((prev) => ({ ...prev, [a.id]: e.target.value }))} />
+                  </label>
+                )}
+                {cajaMethod[a.id] && (
+                  <p><button type="button" className="big-btn green" onClick={() => cerrarConPago(a)}>Cerrar cuenta</button></p>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -114,6 +156,7 @@ export default function CajaView() {
           <div className="item"><span>Total ganado hoy</span><b>{mxn(summary.totalCents)}</b></div>
           <div className="item"><span>Efectivo</span><span>{mxn(summary.cashCents)}</span></div>
           <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(summary.cardCents)}</span></div>
+          <div className="item"><span>Propinas (tarjeta)</span><span>{mxn(summary.tipCents ?? 0)}</span></div>
           {summary.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(summary.unclassifiedCents)}</span></div>}
           <h3>Por mesa</h3>
           {summary.perTable.map((t: any) => (
@@ -138,6 +181,7 @@ export default function CajaView() {
               <div className="item"><span>Total ganado</span><b>{mxn(cut.totalCents)}</b></div>
               <div className="item"><span>Efectivo</span><span>{mxn(cut.cashCents)}</span></div>
               <div className="item"><span>Tarjeta (terminal)</span><span>{mxn(cut.cardCents)}</span></div>
+              <div className="item"><span>Propinas (tarjeta)</span><span>{mxn(cut.tipCents ?? 0)}</span></div>
               {cut.unclassifiedCents > 0 && <div className="item"><span>Sin método registrado</span><span>{mxn(cut.unclassifiedCents)}</span></div>}
               <h3>Por mesa</h3>
               {cut.perTable.map((t: any) => (
@@ -155,7 +199,7 @@ export default function CajaView() {
                 <button type="button" className="big-btn" onClick={() => setShowCutReview(true)}>Corte final del día</button>
               ) : (
                 <>
-                  <p><b>Revisa antes de confirmar:</b> {summary ? `${summary.totalOrders} pedidos · ${mxn(summary.totalCents)} ganados · Efectivo ${mxn(summary.cashCents)} · Tarjeta ${mxn(summary.cardCents)}` : "sin datos"}</p>
+                  <p><b>Revisa antes de confirmar:</b> {summary ? `${summary.totalOrders} pedidos · ${mxn(summary.totalCents)} ganados · Efectivo ${mxn(summary.cashCents)} · Tarjeta ${mxn(summary.cardCents)} · Propinas ${mxn(summary.tipCents ?? 0)}` : "sin datos"}</p>
                   {summary?.perTable?.map((t: any) => (
                     <div className="item" key={t.tableId}><span>{t.tableLabel}</span><span>{t.orders} pedido{t.orders === 1 ? "" : "s"} · {mxn(t.totalCents)}</span></div>
                   ))}

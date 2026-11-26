@@ -23,9 +23,9 @@ import { useStaffAlerts, StaffAlertUI, type StaffEvent } from "../StaffAlerts";
 //   cuenta. El parpadeo es solo visual: las alertas que ya existen
 //   (vibración/sonido/banner) no se tocan.
 // - Arriba de cada mesa va el recuadro con su pedido COMPLETO, con los
-//   mismos datos y acciones que tenía la lista de cuentas: platillos
-//   con estado, indicaciones, pago, Marcar entregado, Avisar a cocina,
-//   alertas y Cerrar cuenta. Nada se pierde.
+//   mismos datos que tenía la lista de cuentas: platillos con estado,
+//   indicaciones, pago, propina y Marcar entregado. Los meseros ya NO
+//   cierran cuentas ni avisan a cocina: solo Caja libera las mesas.
 // - Solo mesas 1–10, sin parte B (decisión del dueño 25 nov 2026): la
 //   franja "Segundo local" (Mesa 5B y 6B) se eliminó.
 // Las alertas se retiran solas cuando el mesero entrega el platillo o
@@ -47,23 +47,6 @@ export default function MeserosView() {
     const d = await res.json().catch(() => null);
     setMsg(res.ok ? (okMsg ?? d?.message ?? "Listo.") : (d?.error ?? "No se pudo hacer"));
     load();
-  }
-  // Cerrar la cuenta y liberar la mesa para nuevos comensales. Si hay
-  // platillos sin entregar o la cuenta no está pagada, pide confirmación
-  // y deja claro qué queda pendiente (la cuenta queda registrada como
-  // cerrada sin cobrar y no entra en el total ganado del día).
-  function cerrarMesa(a: any) {
-    const pending = (a.items ?? []).filter((i: any) => ["pendiente", "preparando", "listo"].includes(i.status));
-    const unpaid = a.status !== "pagada";
-    if (pending.length > 0 || unpaid) {
-      const lines = [
-        `¿Seguro que quieres cerrar ${a.tableLabel} y liberar la mesa?`,
-        pending.length > 0 ? `Platillos sin entregar: ${pending.map((i: any) => i.name).join(", ")}.` : "",
-        unpaid ? `La cuenta NO está pagada (total $${(a.totalCents / 100).toFixed(0)}, estado: ${a.status}). Quedará registrada como cerrada sin cobrar.` : "",
-      ].filter(Boolean).join("\n");
-      if (!window.confirm(lines)) return;
-    }
-    void post("close", { accountId: a.id }, "Mesa liberada. Caja fue avisada.");
   }
   const accounts = (data?.accounts ?? []).filter((a: any) => a.status !== "cerrada");
   const ready = accounts.flatMap((a: any) => a.items.filter((i: any) => i.status === "listo").map((i: any) => ({ ...i, tableLabel: a.tableLabel })));
@@ -108,16 +91,18 @@ export default function MeserosView() {
   const byTable = new Map<number, any>();
   for (const a of accounts) byTable.set(a.tableId, a);
 
-  // Recuadro del pedido COMPLETO de una mesa: los mismos datos y
-  // acciones que tenía la lista de cuentas (platillos con su estado,
-  // indicaciones especiales, pago y cambio, Marcar entregado, Avisar a
-  // cocina y Cerrar cuenta · Liberar mesa).
+  // Recuadro del pedido COMPLETO de una mesa: platillos con su estado,
+  // indicaciones especiales, pago y cambio, propina y Marcar entregado.
+  // Los meseros YA NO cierran cuentas ni avisan a cocina (decisión del
+  // dueño 25 nov 2026): solo Caja libera las mesas. La entrega la marca
+  // el mesero aquí, con "Marcar entregado".
   function renderAccountCard(a: any) {
     const pendingItems = (a.items ?? []).filter((i: any) => ["pendiente", "preparando", "listo"].includes(i.status));
     return (
       <div className="card">
         <b>{a.tableLabel}</b> — {a.status} — Total: ${(a.totalCents / 100).toFixed(0)}
         {a.payment && <div className="muted">Pago: {a.payment.method === "efectivo" ? `Efectivo con $${(a.payment.cashCents ?? 0) / 100} · Cambio: $${(((a.payment.cashCents ?? 0) - a.totalCents) / 100).toFixed(0)}` : "Tarjeta (terminal)"}{a.changeReady ? " · Cambio listo ✓" : ""}</div>}
+        {(a.tipCents ?? 0) > 0 && <div className="muted">💰 Propina: ${((a.tipCents ?? 0) / 100).toFixed(0)}</div>}
         {a.items?.map((i: any) => (
           <div key={i.id}>
             <div className="item">
@@ -135,10 +120,6 @@ export default function MeserosView() {
         {pendingItems.length > 0 && <p className="muted">⚠ Sin entregar: {pendingItems.map((i: any) => i.name).join(", ")}</p>}
         {a.status === "abierta" && <p className="muted">Sin pagar todavía (total ${(a.totalCents / 100).toFixed(0)}).</p>}
         {a.status === "cuenta-pedida" && <p className="muted">Cuenta pedida — esperando a caja.</p>}
-        <p>
-          <button type="button" onClick={() => post("call-kitchen", { accountId: a.id })}>Avisar a cocina</button>{" "}
-          <button type="button" className="staff-btn" onClick={() => cerrarMesa(a)}>Cerrar cuenta · Liberar mesa</button>
-        </p>
       </div>
     );
   }
@@ -196,6 +177,14 @@ export default function MeserosView() {
       {msg && <p>{msg}</p>}
       {err && <p className="danger">{err}</p>}
       {!err && accounts.length === 0 && <p className="muted">No hay cuentas abiertas.</p>}
+      {/* Propinas del día por lado del salón (solo tarjeta: las registra
+          Caja al cerrar la cuenta). Izquierda = mesas 1–5, derecha =
+          mesas 6–10. También se ve la propina dentro del recuadro del
+          pedido de cada mesa que tenga una. */}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, margin: "10px 0" }}>
+        <div className="card" style={{ flex: 1, margin: 0 }}><b>💰 Propinas · Mesas 1–5</b><div style={{ fontSize: 26 }}>${((data?.tips?.left ?? 0) / 100).toFixed(0)}</div></div>
+        <div className="card" style={{ flex: 1, margin: 0 }}><b>💰 Propinas · Mesas 6–10</b><div style={{ fontSize: 26 }}>${((data?.tips?.right ?? 0) / 100).toFixed(0)}</div></div>
+      </div>
       <h3>Mapa del salón</h3>
       <p className="muted">Izquierda: mesas 1 a 5 (la 1 abajo). Derecha: mesas 6 a 10 (la 6 arriba). Mesa activa: <b style={{ color: "#be185d" }}>rosa</b> a la izquierda, <b style={{ color: "#1d4ed8" }}>azul</b> a la derecha. Cuando cocina marca un platillo listo, la mesa <b>parpadea</b> en su color hasta que se entrega. Se entra por la puerta de abajo.</p>
       <div className="salon">

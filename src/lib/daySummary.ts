@@ -21,6 +21,9 @@ export interface DaySummary {
   cashCents: number;
   cardCents: number;
   unclassifiedCents: number;
+  // Propinas del día (solo tarjeta), SEPARADAS del total de comida: no
+  // se mezclan con totalCents/cashCents/cardCents.
+  tipCents: number;
   openAccounts: DayOpenAccount[];
   // Cuentas cerradas sin cobrar (el mesero liberó la mesa o caja la
   // cerró antes del pago): su dinero NO está en el total ganado.
@@ -58,8 +61,11 @@ export function computeDaySummary(accounts: Account[], date: string): DaySummary
   const totalCents = done.reduce((s, a) => s + a.totalCents, 0);
   const cashCents = done.filter((a) => a.payment?.method === "efectivo").reduce((s, a) => s + a.totalCents, 0);
   const cardCents = done.filter((a) => a.payment?.method === "terminal").reduce((s, a) => s + a.totalCents, 0);
+  // Propinas: solo de las cuentas ganadas (pagadas/cerradas con método),
+  // separadas del total de comida.
+  const tipCents = done.reduce((s, a) => s + (a.tipCents ?? 0), 0);
   const openAccounts: DayOpenAccount[] = todays
     .filter((a) => a.status === "abierta" || a.status === "cuenta-pedida")
     .map((a) => ({ accountId: a.id, tableLabel: a.tableLabel, status: a.status, totalCents: a.totalCents }));
-  return { date, perTable, totalOrders: done.length, totalCents, cashCents, cardCents, unclassifiedCents: totalCents - cashCents - cardCents, openAccounts, closedUnpaid };
+  return { date, perTable, totalOrders: done.length, totalCents, cashCents, cardCents, unclassifiedCents: totalCents - cashCents - cardCents, tipCents, openAccounts, closedUnpaid };
 }

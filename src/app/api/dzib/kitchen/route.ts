@@ -49,7 +49,10 @@ export async function POST(req: Request) {
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, status: result.status });
   }
-  const NEXT: Record<string, string> = { pendiente: "preparando", preparando: "listo", listo: "entregado" };
+  // Cocina avanza: pendiente → preparando → listo. La entrega NO la
+  // marca cocina: un platillo listo se queda en "listo" hasta que el
+  // MESERO lo marca entregado desde su vista.
+  const NEXT: Record<string, string> = { pendiente: "preparando", preparando: "listo" };
   for (const a of db.accounts) {
     const it = a.items.find((i) => i.id === body.itemId);
     if (it) {

@@ -36,6 +36,10 @@ export interface Account {
   id: string; tableId: number; tableLabel: string; items: OrderItem[];
   totalCents: number; status: "abierta" | "cuenta-pedida" | "pagada" | "cerrada";
   payment?: { method: "terminal" | "efectivo"; cashCents?: number } | null;
+  // Propina en centavos dejada por el cliente (solo con tarjeta: Caja
+  // la escribe al cerrar la cuenta). Se muestra SEPARADA del total de
+  // comida en el resumen del día y en la vista de meseros.
+  tipCents?: number;
   changeReady?: boolean; kitchenAlert?: boolean;
   // La cerró el mesero (botón "Liberar mesa"): la mesa queda libre para
   // nuevos comensales y caja recibe el aviso. True solo cuando el cierre
