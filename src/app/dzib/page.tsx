@@ -299,6 +299,16 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const showPay = Boolean(accountId) && account?.status === "abierta" && extras.length === 0 && allDelivered &&
     (corridasWithDishes.length > 0 ? (lunchVisible ? allCorridasRequested : true) : (extrasSent || sentExtras.length > 0));
 
+  // Botón flotante de celular "Tu pedido": cambia de estado cuando el
+  // cliente agrega cosas a su pedido. Si hay algo elegido pero aún no
+  // enviado a cocina (desayunos/extras en `extras`, o un tiempo elegido
+  // sin pedir cuando la comida está visible), el botón dice "Confirma
+  // tu pedido", en rojo y parpadeando. Al enviarlo, vuelve a su estado
+  // normal "Tu pedido". Solo cambia el botón flotante; el panel lateral
+  // de escritorio no se toca.
+  const hasPendingToConfirm = extras.length > 0 ||
+    corridasWithDishes.some((id) => selectedTiempos(id).some((t) => !requested(t, id)));
+
   // ---- Acciones ----
   // group: "desayuno" = desayuno (sencillo, especial, guisado, otra
   // opción o extra de desayuno) y "separado" = pedido por separado de
@@ -844,8 +854,8 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       </main>
 {pedidoOpen && <div className="pedido-backdrop" onClick={() => setPedidoOpen(false)} aria-hidden="true" />}
       {table && (
-        <button type="button" className="pedido-fab" onClick={() => setPedidoOpen(true)}>
-          🧾 Tu pedido{grandTotal > 0 ? ` · ${mxn(grandTotal)}` : ""}
+        <button type="button" className={hasPendingToConfirm ? "pedido-fab confirma" : "pedido-fab"} onClick={() => setPedidoOpen(true)}>
+          {hasPendingToConfirm ? "❗ Confirma tu pedido" : <>🧾 Tu pedido{grandTotal > 0 ? ` · ${mxn(grandTotal)}` : ""}</>}
         </button>
       )}
       {/* Botón circular fijo "Asistencia mesero": siempre visible con
