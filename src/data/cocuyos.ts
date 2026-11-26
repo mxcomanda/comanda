@@ -4,19 +4,15 @@
 // postres/coctelería-licores, coctelería/sin alcohol).
 // Precios en centavos MXN, tal como están impresos.
 //
-// PRECIOS POR CONFIRMAR (priceCents: null — se muestran como "Precio por
-// confirmar" y NO se pueden pedir hasta que Cesar confirme el precio):
-// - Gringas de Lengua, de Bisteck y Campechana: el brillo de la foto tapa
-//   el precio. Sí se leen: Pastor o Suadero $80, Tripa $80, Longaniza $80,
-//   Pechuga empanizada $110, Pechuga asada $100.
-// - Quesos fundidos: solo se lee Cazuela de queso $100. Champiqueso,
-//   Choriqueso y queso con bistek quedan cortados en el borde derecho de
-//   la foto (se ven "$12…" y "$1…", sin el precio completo).
+// PRECIOS CONFIRMADOS POR CESAR 2026-11-26 (antes no se leían en las fotos):
+// - Gringas: Lengua $110, Bisteck $110, Campechana $80.
+// - Quesos fundidos: Cazuela de queso $100, Champiqueso $120,
+//   Choriqueso $120, Queso fundido con bistek $150.
 //
 // LECTURAS APROXIMADAS (confirmar con Cesar):
 // - Gringas: "Porciones de proteína: 100…" (cortado; se asume 100 g como
 //   en quesadillas).
-// - "Matusalem Patino" en la foto es casi seguro Matusalem Platino.
+// - "Matusalem Patino" en la foto es Matusalem Platino (confirmado por Cesar 2026-11-26).
 // - Medusa: "Uracazo Azul" en la foto = Curaçao azul.
 // - Cervezas: "Por disposición oficial a partir de las 2:00 am / No se
 //   vende ninguna bebida alcohólica ni con alimentos" (texto cortado;
@@ -27,7 +23,7 @@
 //   por copa; la nota de la categoría lo dice así.
 //
 // SUPUESTOS DEL SISTEMA (confirmar con Cesar):
-// - Mesas 1–10, como en Dzib (el menú no dice cuántas mesas hay).
+// - Mesas 1–10 confirmadas por Cesar 2026-11-26 (por ahora; serán más después).
 // - Sin corridas ni tiempos: todo se pide por separado y va directo a
 //   cocina (tacos, quesadillas, etc.) o a barra (bebidas), como un pedido
 //   normal. El flujo cocina → mesero → caja es el mismo que Dzib.
@@ -156,9 +152,9 @@ export const COCUYOS_MENU: CocuyosItem[] = [
   { id: 1038, category: "quesadillas", nameEs: "Quesadilla de suadero", nameEn: "Suadero quesadilla", descEs: "Suadero", descEn: "Brisket", priceCents: 6000, station: "cocina" },
   // ---------- GRINGAS (tortilla de harina, proteína 100 g) ----------
   { id: 1039, category: "gringas", nameEs: "Gringa de pastor o suadero", nameEn: "Pastor or suadero gringa", descEs: "Pastor o suadero", descEn: "Marinated pork or brisket", priceCents: 8000, station: "cocina" },
-  { id: 1040, category: "gringas", nameEs: "Gringa de lengua", nameEn: "Lengua gringa", descEs: "Lengua", descEn: "Tongue", priceCents: null, station: "cocina" },
-  { id: 1041, category: "gringas", nameEs: "Gringa de bisteck", nameEn: "Bisteck gringa", descEs: "Bisteck", descEn: "Steak", priceCents: null, station: "cocina" },
-  { id: 1042, category: "gringas", nameEs: "Gringa campechana", nameEn: "Campechana gringa", descEs: "Suadero con longaniza", descEn: "Brisket with sausage", priceCents: null, station: "cocina" },
+  { id: 1040, category: "gringas", nameEs: "Gringa de lengua", nameEn: "Lengua gringa", descEs: "Lengua", descEn: "Tongue", priceCents: 11000, station: "cocina" },
+  { id: 1041, category: "gringas", nameEs: "Gringa de bisteck", nameEn: "Bisteck gringa", descEs: "Bisteck", descEn: "Steak", priceCents: 11000, station: "cocina" },
+  { id: 1042, category: "gringas", nameEs: "Gringa campechana", nameEn: "Campechana gringa", descEs: "Suadero con longaniza", descEn: "Brisket with sausage", priceCents: 8000, station: "cocina" },
   { id: 1043, category: "gringas", nameEs: "Gringa de tripa", nameEn: "Tripe gringa", descEs: "Tripa", descEn: "Tripe", priceCents: 8000, station: "cocina" },
   { id: 1044, category: "gringas", nameEs: "Gringa de longaniza", nameEn: "Longaniza gringa", descEs: "Longaniza", descEn: "Sausage", priceCents: 8000, station: "cocina" },
   { id: 1045, category: "gringas", nameEs: "Gringa de pechuga empanizada", nameEn: "Pechuga empanizada gringa", descEs: "Pechuga empanizada", descEn: "Breaded chicken", priceCents: 11000, station: "cocina" },
@@ -197,9 +193,9 @@ export const COCUYOS_MENU: CocuyosItem[] = [
   { id: 1075, category: "extras", nameEs: "Queso extra para papas", nameEn: "Extra cheese for fries", descEs: "Queso extra", descEn: "Extra cheese", priceCents: 2000, station: "cocina" },
   // ---------- QUESOS FUNDIDOS AL MOMENTO ----------
   { id: 1076, category: "quesos", nameEs: "Cazuela de queso", nameEn: "Cheese casserole", descEs: "Queso fundido en cazuela", descEn: "Melted cheese in a casserole dish", priceCents: 10000, station: "cocina" },
-  { id: 1077, category: "quesos", nameEs: "Champiqueso", nameEn: "Champiqueso", descEs: "Queso fundido con champiñones", descEn: "Melted cheese with mushrooms", priceCents: null, station: "cocina" },
-  { id: 1078, category: "quesos", nameEs: "Choriqueso", nameEn: "Choriqueso", descEs: "Queso fundido con chorizo", descEn: "Melted cheese with chorizo", priceCents: null, station: "cocina" },
-  { id: 1079, category: "quesos", nameEs: "Queso fundido con bistek", nameEn: "Melted cheese with steak", descEs: "Queso fundido con bistek", descEn: "Melted cheese with steak", priceCents: null, station: "cocina" },
+  { id: 1077, category: "quesos", nameEs: "Champiqueso", nameEn: "Champiqueso", descEs: "Queso fundido con champiñones", descEn: "Melted cheese with mushrooms", priceCents: 12000, station: "cocina" },
+  { id: 1078, category: "quesos", nameEs: "Choriqueso", nameEn: "Choriqueso", descEs: "Queso fundido con chorizo", descEn: "Melted cheese with chorizo", priceCents: 12000, station: "cocina" },
+  { id: 1079, category: "quesos", nameEs: "Queso fundido con bistek", nameEn: "Melted cheese with steak", descEs: "Queso fundido con bistek", descEn: "Melted cheese with steak", priceCents: 15000, station: "cocina" },
   // ---------- POSTRES ($55 c/u; pasteles $65) ----------
   { id: 1080, category: "postres", nameEs: "Gelatina de yogurt", nameEn: "Yogurt jelly", descEs: "Gelatina de yogurt", descEn: "Yogurt jelly", priceCents: 5500, station: "cocina" },
   { id: 1081, category: "postres", nameEs: "Arroz con leche", nameEn: "Rice pudding", descEs: "Arroz con leche", descEn: "Rice pudding", priceCents: 5500, station: "cocina" },
@@ -379,9 +375,9 @@ export const COCUYOS_MENU: CocuyosItem[] = [
   { id: 1248, category: "sin-alcohol", nameEs: "Sol en la Playa", nameEn: "Sol en la Playa", descEs: "Jugo de durazno, jugo de piña, jugo de naranja y jugo de arándano", descEn: "Peach juice, pineapple juice, orange juice and cranberry juice", priceCents: 8000, station: "barra" },
 ];
 
-// Ítems con precio por confirmar (no se pueden pedir hasta que Cesar
-// confirme el precio): gringas de lengua, bisteck y campechana, y tres
-// quesos fundidos (champiqueso, choriqueso, con bistek).
+// Ítems con precio por confirmar (hoy ninguno: Cesar confirmó los 6
+// precios pendientes el 2026-11-26). Se conserva el filtro por si en el
+// futuro algún precio queda pendiente.
 export const COCUYOS_PENDING_PRICE = COCUYOS_MENU.filter((i) => i.priceCents === null);
 
 export function cocuyosItemById(id: number): CocuyosItem | undefined {
