@@ -40,7 +40,8 @@ type Extra = { key: string; name: string; priceCents: number; detail?: string; n
 type WaterPick = { name: string; priceCents: number; qty: number };
 type Sel = Record<Tiempo, any>;
 const emptySel = (): Sel => ({ primero: null, segundo: null, tercero: null });
-// Bebida y acompañamiento incluidos en los desayunos sencillos ($82).
+// Bebida y acompañamiento incluidos en los desayunos (sencillos,
+// especiales, otras opciones y guisado del día), sin costo extra.
 const DRINKS = ["Café de olla", "Té"] as const;
 const SIDES = ["Jugo de naranja", "Fruta (papaya con plátano)"] as const;
 
@@ -102,10 +103,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // botón flotante. En pantallas anchas el panel siempre está visible
   // a la derecha y este estado no hace nada.
   const [pedidoOpen, setPedidoOpen] = useState(false);
-  // Elección de bebida/acompañamiento de un desayuno sencillo o del
-  // guisado del día: qué platillo tiene el selector abierto y qué lleva
-  // elegido (por defecto, café de olla + jugo de naranja). Solo los
-  // sencillos y el guisado incluyen esto.
+  // Elección de bebida/acompañamiento de un desayuno: qué platillo
+  // tiene el selector abierto y qué lleva elegido (por defecto, café
+  // de olla + jugo de naranja). Sencillos, especiales, otras opciones
+  // y el guisado del día incluyen esto.
   const [breakfastPick, setBreakfastPick] = useState<{ id: number | string; drink: string; side: string } | null>(null);
   // Texto del ingrediente extra (hay que escribirlo para poder agregarlo).
   const [extraIngredientText, setExtraIngredientText] = useState("");
@@ -365,14 +366,15 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
       return { ...d, water };
     }));
   }
-  // Agregar un desayuno sencillo con su bebida y acompañamiento elegidos
-  // (incluidos en el $82, sin costo extra).
+  // Agregar un desayuno con su bebida y acompañamiento elegidos
+  // (incluidos en el precio, sin costo extra). La confirmación no se
+  // muestra como línea de texto: el platillo ya aparece en "Tu pedido"
+  // con su elección, y cocina/meseros/caja la ven en el detalle.
   function addBreakfast(item: any) {
     const pick = breakfastPick;
     const detail = pick && pick.id === item.id ? `${pick.drink} · ${pick.side}` : "Café de olla · Jugo de naranja";
     addExtra(item.name, item.priceCents, detail, "desayuno");
     setBreakfastPick(null);
-    setMsg(`${item.name} agregado (${detail}).`);
   }
   // Agregar el ingrediente extra: hay que escribir cuál es.
   function addIngredientExtra(item: any, group: "desayuno" | "separado" = "desayuno") {
@@ -482,16 +484,15 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const addBtn = (name: string, priceCents: number) => table ? (
     <button type="button" onClick={() => addExtra(name, priceCents)}>Agregar</button>
   ) : null;
-  // Fila de un desayuno: los sencillos (categoría "desayuno") y el
+  // Fila de un desayuno: sencillos, especiales, otras opciones y el
   // guisado del día incluyen café de olla o té y jugo de naranja o
   // fruta; al tocar "Elegir" se abre el selector y se agregan con su
-  // elección (sin costo extra). Especiales y otras opciones se agregan
-  // directo, sin elección.
+  // elección (sin costo extra).
   const breakfastItemRow = (i: any) => {
     const pick = breakfastPick;
     return (
     <div key={i.id}>
-      <div className="item"><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (i.category === "desayuno" ? (
+      <div className="item"><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (i.category === "desayuno" || i.category === "especial" || i.category === "otra" ? (
         <button type="button" onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>Elegir</button>
       ) : (
         <button type="button" onClick={() => addExtra(i.name, i.priceCents, undefined, "desayuno")}>Agregar</button>
@@ -563,6 +564,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         <div className="dzib-header-inner">
           <div className="dzib-brand">DZIB</div>
           <div className="dzib-sub">Regina 54 · Centro Histórico · Cocina casera mexicana</div>
+          <a className="dzib-personal" href="/dzib/personal">Personal</a>
         </div>
       </header>
       <main className="wrap dzib-layout">
@@ -584,13 +586,12 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           {/* El guisado del día ($78) también incluye café/té y jugo/fruta,
               igual que los sencillos: se agrega con el mismo selector. */}
           {breakfastItemRow({ id: "guisado", name: DZIB_SETTINGS.guisadoDelDia, description: "", priceCents: DZIB_SETTINGS.guisadoPriceCents, category: "desayuno" })}
-          <p className="muted">Desayunos sencillos y guisado del día incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
+          <p className="muted">Desayunos sencillos, especiales, otras opciones y guisado del día incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano).</p>
           {breakfastGroups.map((g) => (
             <SubAcc key={g.key} title={g.title} open={openBreakfast === g.key} onToggle={() => setOpenBreakfast(openBreakfast === g.key ? null : g.key)}>
               {g.items.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i) : breakfastItemRow(i)))}
             </SubAcc>
           ))}
-          <p className="muted">Lo que agregues aquí se cobra por separado, a su precio individual.</p>
         </Accordion>
 
         {/* ---------- MENÚ DE COMIDA DEL DÍA ---------- */}
@@ -710,7 +711,6 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
         {payResult && account?.status === "cuenta-pedida" && (
           <div className="alert green">Cuenta pedida. {account?.payment?.method === "efectivo" ? `Tu cambio es ${mxn(payResult.changeCents)}.` : "El mesero trae la terminal."}</div>
         )}
-        <p><a href="/dzib/personal">Personal</a></p>
         </div>
         <aside className={`dzib-pedido-aside${pedidoOpen ? " abierto" : ""}`}>
           <div className="pedido-aside-head">
