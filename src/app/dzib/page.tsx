@@ -276,6 +276,18 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // El agua de una comida (kind "agua" con corrida) se muestra bajo su
   // comida en el Status, no aquí en "por separado".
   const sentSeparate = sentExtras.filter((i) => i.group !== "desayuno" && !(i.kind === "agua" && i.corrida));
+  // Cantidad de un platillo ya en el pedido (para pintarlo de color y
+  // mostrar su contador ×N): lo pendiente en este navegador (extras sin
+  // enviar) + lo que ya vive en la cuenta (Postgres, fuente de verdad:
+  // sobrevive recargar la página o cambiar de dispositivo). Cuenta por
+  // nombre, sumando qty. Solo ítems sin tiempo (desayunos y por
+  // separado) y no cancelados. Si se quita un platillo del pedido, su
+  // color y su contador se actualizan solos.
+  const addedCount = (name: string) => {
+    const pending = extras.filter((e) => e.name === name).reduce((s, e) => s + (e.qty ?? 1), 0);
+    const sent = sentExtras.filter((i) => i.name === name && i.status !== "cancelado").reduce((s, i) => s + (i.qty ?? 1), 0);
+    return pending + sent;
+  };
 
   // Pagar aparece cuando todo lo elegido ya se pidió: cada corrida con
   // platillos tiene sus tiempos pedidos y no quedan extras sin enviar.
@@ -487,15 +499,20 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   // Fila de un desayuno: sencillos, especiales, otras opciones y el
   // guisado del día incluyen café de olla o té y jugo de naranja o
   // fruta; al tocar "Elegir" se abre el selector y se agregan con su
-  // elección (sin costo extra).
+  // elección (sin costo extra). Si el platillo ya está en el pedido, la
+  // fila cambia de color y muestra su contador ×N (addedCount, leído de
+  // la cuenta); al volver a pulsar se agrega otra unidad y el contador
+  // sube. El botón pasa a "Agregar otro" con el color de elegido.
   const breakfastItemRow = (i: any) => {
     const pick = breakfastPick;
+    const count = addedCount(i.name);
+    const isBreakfast = i.category === "desayuno" || i.category === "especial" || i.category === "otra";
     return (
     <div key={i.id}>
-      <div className="item"><div><b>{i.name}</b>{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (i.category === "desayuno" || i.category === "especial" || i.category === "otra" ? (
-        <button type="button" onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>Elegir</button>
+      <div className={count > 0 ? "item agregado" : "item"}><div><b>{i.name}</b>{count > 0 && <span className="qty-badge">×{count}</span>}{i.description && <div className="muted">{i.description}</div>}</div><span>{mxn(i.priceCents)} {table && (isBreakfast ? (
+        <button type="button" className={count > 0 ? "picked" : ""} onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>{count > 0 ? "Agregar otro" : "Elegir"}</button>
       ) : (
-        <button type="button" onClick={() => addExtra(i.name, i.priceCents, undefined, "desayuno")}>Agregar</button>
+        <button type="button" className={count > 0 ? "picked" : ""} onClick={() => addExtra(i.name, i.priceCents, undefined, "desayuno")}>{count > 0 ? "Agregar otro" : "Agregar"}</button>
       ))}</span></div>
       {pick && pick.id === i.id && (
         <div style={{ border: "2px solid var(--gold)", borderRadius: 12, padding: 12, margin: "4px 0 10px" }}>
@@ -520,10 +537,14 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   };
   // Fila del ingrediente extra: hay que escribir cuál se necesita.
   // group: "desayuno" cuando se agrega desde Desayunos, "separado"
-  // cuando se agrega desde "Pedir por separado".
-  const extraIngredientRow = (i: any, group: "desayuno" | "separado" = "desayuno") => (
-    <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">Escribe qué ingrediente necesitas</div><input placeholder="Ej. queso extra" value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" onClick={() => addIngredientExtra(i, group)}>Agregar</button>}</span></div>
-  );
+  // cuando se agrega desde "Pedir por separado". Igual que los demás
+  // desayunos: si ya se agregó, la fila cambia de color y muestra ×N.
+  const extraIngredientRow = (i: any, group: "desayuno" | "separado" = "desayuno") => {
+    const count = addedCount(i.name);
+    return (
+    <div className={count > 0 ? "item agregado" : "item"} key={i.id}><div><b>{i.name}</b>{count > 0 && <span className="qty-badge">×{count}</span>}<div className="muted">Escribe qué ingrediente necesitas</div><input placeholder="Ej. queso extra" value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" className={count > 0 ? "picked" : ""} onClick={() => addIngredientExtra(i, group)}>{count > 0 ? "Agregar otro" : "Agregar"}</button>}</span></div>
+    );
+  };
   const editingSel = selFor(editingId);
   const editingSent = isSent(editingId);
 

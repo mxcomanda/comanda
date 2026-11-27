@@ -140,6 +140,13 @@ button { cursor: pointer; }
    cliente vea que sí la pidió. No cambia al tocar otra cosa: solo
    cambia si el cliente elige otra opción o la quita. */
 .dzib button.picked, .dzib .pay-row button.picked { background: var(--burnt); color: #fff; border-color: var(--gold); box-shadow: 3px 3px 0 var(--dzib-ink); }
+/* Platillo ya agregado al pedido (comensal): la fila cambia de color
+   (fondo cálido + borde dorado con acento naranja quemado, como un
+   plato elegido) y muestra su contador ×N, para que el cliente vea de
+   un vistazo qué ya pidió. El estado se lee de la cuenta (Postgres),
+   no solo del navegador: sobrevive recargar o cambiar de dispositivo. */
+.dzib .item.agregado { background: #fdeeda; border: 2px solid var(--gold); border-left: 6px solid var(--burnt); border-radius: 12px; padding: 10px 12px; }
+.dzib .qty-badge { display: inline-block; background: var(--burnt); color: #fff; border: 2px solid var(--dzib-ink); border-radius: 999px; padding: 1px 9px; font-size: 13px; font-weight: 900; margin-left: 8px; vertical-align: middle; }
 /* Acordeón cerrado por horario (desayunos después de la 1:00 pm, comida
    antes de la 1:00 pm): se ve apagado y no se puede abrir. */
 .dzib .accordion.disabled { opacity: .6; }
