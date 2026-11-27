@@ -112,3 +112,13 @@ export const STATUS_LABEL: Record<OrderItemStatus, string> = {
   entregado: "Entregado",
   cancelado: "Cancelado",
 };
+// Etiquetas de estado en inglés, solo para la vista del comensal
+// (cocina/meseros/caja se quedan en español).
+export const STATUS_LABEL_EN: Record<OrderItemStatus, string> = {
+  espera: "Waiting",
+  pendiente: "In the kitchen",
+  preparando: "Being prepared",
+  listo: "Ready to pick up",
+  entregado: "Served",
+  cancelado: "Cancelled",
+};

@@ -82,8 +82,12 @@ button { cursor: pointer; }
 .dzib-header-inner { max-width: 1080px; margin: 0 auto; padding: 20px; position: relative; }
 /* Acceso del personal: discreto, arriba a la derecha del encabezado,
    para no estorbar con los botones de pedir. */
-.dzib-personal { position: absolute; top: 14px; right: 16px; color: #cfc4ae; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; text-decoration: none; opacity: .85; }
+.dzib-personal { position: absolute; top: 52px; right: 16px; color: #cfc4ae; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; text-decoration: none; opacity: .85; }
 .dzib-personal:hover { opacity: 1; text-decoration: underline; }
+/* Interruptor de idioma ES | EN en el encabezado (como Cocuyos). */
+.dzib .dzib-lang-toggle { position: absolute; top: 14px; right: 16px; display: flex; border: 2px solid var(--gold); border-radius: 999px; overflow: hidden; }
+.dzib .dzib-lang-toggle button { border: 0; border-radius: 0; background: transparent; color: #f5efe0; font-weight: 900; font-size: 12px; padding: 5px 12px; }
+.dzib .dzib-lang-toggle button.active { background: var(--gold); color: var(--dzib-ink); }
 .dzib-brand { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: clamp(44px, 8vw, 64px); letter-spacing: .12em; line-height: 1; color: #f5efe0; text-shadow: 3px 3px 0 var(--burnt); }
 .dzib-sub { color: var(--gold); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; margin-top: 6px; }
 .dzib h2 { font-family: 'Oswald', sans-serif; font-size: 30px; letter-spacing: .03em; text-transform: uppercase; color: var(--dzib-ink); border-bottom: 3px solid var(--gold); padding-bottom: 6px; margin-top: 28px; }
@@ -267,7 +271,7 @@ button { cursor: pointer; }
 .cocina .alert-enable { font-size: 19.2px; }
 
 /* ---------- Botón circular fijo "Asistencia mesero" (comensal) ---------- */
-.dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 72px; height: 72px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 3px 3px 0 var(--dzib-ink); font-weight: 900; font-size: 11px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px; }
+.dzib .fab-waiter { position: fixed; right: 18px; bottom: 18px; z-index: 80; width: 72px; height: 72px; border-radius: 50%; background: var(--red); color: #fff; border: 3px solid var(--dzib-ink); box-shadow: 3px 3px 0 var(--dzib-ink); font-weight: 900; font-size: 11px; line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; justify-content: center; text-align: center; padding: 5px; overflow-wrap: break-word; }
 .dzib .fab-waiter:disabled { background: #2e7d32; color: #fff; }
 
 /* ---------- Los Cocuyos (rojo #D5001C, negro, dorado #FFC400, crema) ---------- */

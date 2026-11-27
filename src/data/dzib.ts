@@ -9,6 +9,8 @@ export interface BreakfastItem {
   id: number;
   name: string;
   description: string;
+  nameEn?: string;
+  descriptionEn?: string;
   category: BreakfastCategory;
   priceCents: number;
   kitchen: Kitchen;
@@ -19,6 +21,7 @@ export const DZIB_SETTINGS = {
   breakfastPriceCents: 8200, // sencillos $82
   breakfastSpecialPriceCents: 9200, // especiales $92
   guisadoDelDia: "Guisado (preguntar por disponibilidad)", // genérico, sin platillo fijo (decisión del dueño 25 nov 2026)
+  guisadoDelDiaEn: "Stew (ask about availability)",
   guisadoPriceCents: 7800, // guisados $78
   defaultSencilloPriceCents: 9100, // comida sencillo $91 (hoja 20 nov 2026)
   defaultSpecialPriceCents: 7800, // menú de $78 (hoja 20 nov 2026)
@@ -48,57 +51,57 @@ export const DZIB_TABLES = [
 
 export const DZIB_BREAKFAST: BreakfastItem[] = [
   // Sencillos $82 — incluyen café de olla o té, y jugo de naranja o fruta (papaya con plátano)
-  { id: 24, name: "Huevos estrellados con tocino", description: "2 piezas de huevo y 2 tiras de tocino", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 25, name: "Huevos con jamón", description: "2 piezas de huevos y 2 rebanadas de jamón", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 26, name: "Huevos con nopales", description: "2 piezas de huevo y nopales", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 27, name: "Huevos al albañil", description: "2 piezas de huevo con salsa verde o roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 28, name: "Huevos con champiñones", description: "2 piezas de huevo y champiñones", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 29, name: "Huevos con salchicha", description: "2 piezas de huevo y 2 piezas de salchicha", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 30, name: "Huevos con tocino", description: "2 piezas de huevo y 2 tiras de tocino", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 31, name: "Huevos con chorizo", description: "2 piezas de huevos y chorizo", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 32, name: "Huevos rancheros", description: "2 piezas de huevo, 2 tortillas con salsa verde o roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 33, name: "Huevos divorciados", description: "2 piezas de huevo, 2 tortillas con salsa verde y roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 34, name: "Chilaquiles gratinados", description: "Tortilla dorada y 1 rebanada de manchego", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 35, name: "Chilaquiles con huevo", description: "Tortilla dorada y 2 piezas de huevo", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 36, name: "Omelette de jamón", description: "2 piezas de huevo y 2 rebanadas de jamón", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 37, name: "Omelette de quesillo", description: "2 piezas de huevo y quesillo", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 38, name: "Omelette de champiñones", description: "2 piezas de huevo y champiñones", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 39, name: "Omelette de espinaca", description: "2 piezas de huevo y espinaca", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 40, name: "Sincronizada", description: "3 tortillas de harina, 2 de jamón, quesillo y queso amarillo", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 41, name: "Huevos socorridos", description: "2 piezas de huevo, frijoles y queso blanco, en salsa verde o roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 42, name: "Enchiladas con huevo", description: "3 tortillas y 2 huevos, en salsa roja o verde", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 43, name: "Enchiladas con queso", description: "3 tortillas y queso blanco, salsa verde o roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 44, name: "Quesadillas de quesillo con espinaca", description: "3 tortillas, quesillo, espinaca y lechuga", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
-  { id: 45, name: "Huevos montados", description: "2 tortillas, 2 huevos, frijoles y 2 rebanadas de jamón en salsa roja", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 24, name: "Huevos estrellados con tocino", description: "2 piezas de huevo y 2 tiras de tocino", nameEn: "Sunny-side-up eggs with bacon", descriptionEn: "2 eggs and 2 strips of bacon", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 25, name: "Huevos con jamón", description: "2 piezas de huevos y 2 rebanadas de jamón", nameEn: "Eggs with ham", descriptionEn: "2 eggs and 2 slices of ham", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 26, name: "Huevos con nopales", description: "2 piezas de huevo y nopales", nameEn: "Eggs with cactus (nopales)", descriptionEn: "2 eggs and nopales", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 27, name: "Huevos al albañil", description: "2 piezas de huevo con salsa verde o roja", nameEn: "Huevos al albañil", descriptionEn: "2 eggs with green or red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 28, name: "Huevos con champiñones", description: "2 piezas de huevo y champiñones", nameEn: "Eggs with mushrooms", descriptionEn: "2 eggs and mushrooms", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 29, name: "Huevos con salchicha", description: "2 piezas de huevo y 2 piezas de salchicha", nameEn: "Eggs with sausage", descriptionEn: "2 eggs and 2 sausages", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 30, name: "Huevos con tocino", description: "2 piezas de huevo y 2 tiras de tocino", nameEn: "Eggs with bacon", descriptionEn: "2 eggs and 2 strips of bacon", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 31, name: "Huevos con chorizo", description: "2 piezas de huevos y chorizo", nameEn: "Eggs with chorizo", descriptionEn: "2 eggs and chorizo", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 32, name: "Huevos rancheros", description: "2 piezas de huevo, 2 tortillas con salsa verde o roja", nameEn: "Huevos rancheros", descriptionEn: "2 eggs, 2 tortillas with green or red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 33, name: "Huevos divorciados", description: "2 piezas de huevo, 2 tortillas con salsa verde y roja", nameEn: "Huevos divorciados", descriptionEn: "2 eggs, 2 tortillas with green and red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 34, name: "Chilaquiles gratinados", description: "Tortilla dorada y 1 rebanada de manchego", nameEn: "Chilaquiles gratinados", descriptionEn: "Crispy tortilla and 1 slice of manchego cheese", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 35, name: "Chilaquiles con huevo", description: "Tortilla dorada y 2 piezas de huevo", nameEn: "Chilaquiles con huevo", descriptionEn: "Crispy tortilla and 2 eggs", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 36, name: "Omelette de jamón", description: "2 piezas de huevo y 2 rebanadas de jamón", nameEn: "Ham omelette", descriptionEn: "2 eggs and 2 slices of ham", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 37, name: "Omelette de quesillo", description: "2 piezas de huevo y quesillo", nameEn: "Oaxaca cheese omelette", descriptionEn: "2 eggs and quesillo (Oaxaca cheese)", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 38, name: "Omelette de champiñones", description: "2 piezas de huevo y champiñones", nameEn: "Mushroom omelette", descriptionEn: "2 eggs and mushrooms", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 39, name: "Omelette de espinaca", description: "2 piezas de huevo y espinaca", nameEn: "Spinach omelette", descriptionEn: "2 eggs and spinach", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 40, name: "Sincronizada", description: "3 tortillas de harina, 2 de jamón, quesillo y queso amarillo", nameEn: "Sincronizada", descriptionEn: "3 flour tortillas, 2 with ham, quesillo and yellow cheese", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 41, name: "Huevos socorridos", description: "2 piezas de huevo, frijoles y queso blanco, en salsa verde o roja", nameEn: "Huevos socorridos", descriptionEn: "2 eggs, beans and white cheese, in green or red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 42, name: "Enchiladas con huevo", description: "3 tortillas y 2 huevos, en salsa roja o verde", nameEn: "Enchiladas with egg", descriptionEn: "3 tortillas and 2 eggs, in red or green salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 43, name: "Enchiladas con queso", description: "3 tortillas y queso blanco, salsa verde o roja", nameEn: "Cheese enchiladas", descriptionEn: "3 tortillas and white cheese, green or red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 44, name: "Quesadillas de quesillo con espinaca", description: "3 tortillas, quesillo, espinaca y lechuga", nameEn: "Quesillo and spinach quesadillas", descriptionEn: "3 tortillas, quesillo, spinach and lettuce", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
+  { id: 45, name: "Huevos montados", description: "2 tortillas, 2 huevos, frijoles y 2 rebanadas de jamón en salsa roja", nameEn: "Huevos montados", descriptionEn: "2 tortillas, 2 eggs, beans and 2 slices of ham in red salsa", category: "desayuno", priceCents: 8200, kitchen: "cocina-a", isAvailable: true },
   // Especiales $92
-  { id: 46, name: "Omelette de verduras gratinado", description: "2 piezas de huevo, verduras cocidas y manchego", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 47, name: "Huevos con pan tostado", description: "2 panes tostados, 2 huevos, aguacate con ensalada", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 48, name: "Taquitos de jamón", description: "3 tortillas de harina, jamón y quesillo, salsa mexicana", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 49, name: "Burritas", description: "3 tortillas de harina, 3 rebanadas de jamón, quesillo y salsa mexicana", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 50, name: "Enchiladas veracruzanas", description: "3 tortillas fritas, 2 huevos y frijol molido", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 51, name: "Sándwich francés", description: "3 rebanadas de pan, 2 rebanadas de jamón, queso blanco y manchego", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 52, name: "Sándwich de queso", description: "3 rebanadas de pan, queso blanco, queso amarillo, quesillo y manchego", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
-  { id: 53, name: "Huevos a la mexicana", description: "2 huevos, jitomate, cebolla y chile", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 46, name: "Omelette de verduras gratinado", description: "2 piezas de huevo, verduras cocidas y manchego", nameEn: "Gratin veggie omelette", descriptionEn: "2 eggs, cooked vegetables and manchego cheese", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 47, name: "Huevos con pan tostado", description: "2 panes tostados, 2 huevos, aguacate con ensalada", nameEn: "Eggs with toast", descriptionEn: "2 toasts, 2 eggs, avocado with salad", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 48, name: "Taquitos de jamón", description: "3 tortillas de harina, jamón y quesillo, salsa mexicana", nameEn: "Ham taquitos", descriptionEn: "3 flour tortillas, ham and quesillo, pico de gallo salsa", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 49, name: "Burritas", description: "3 tortillas de harina, 3 rebanadas de jamón, quesillo y salsa mexicana", nameEn: "Burritas", descriptionEn: "3 flour tortillas, 3 slices of ham, quesillo and pico de gallo salsa", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 50, name: "Enchiladas veracruzanas", description: "3 tortillas fritas, 2 huevos y frijol molido", nameEn: "Enchiladas veracruzanas", descriptionEn: "3 fried tortillas, 2 eggs and mashed beans", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 51, name: "Sándwich francés", description: "3 rebanadas de pan, 2 rebanadas de jamón, queso blanco y manchego", nameEn: "French sandwich", descriptionEn: "3 slices of bread, 2 slices of ham, white cheese and manchego", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 52, name: "Sándwich de queso", description: "3 rebanadas de pan, queso blanco, queso amarillo, quesillo y manchego", nameEn: "Cheese sandwich", descriptionEn: "3 slices of bread, white cheese, yellow cheese, quesillo and manchego", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
+  { id: 53, name: "Huevos a la mexicana", description: "2 huevos, jitomate, cebolla y chile", nameEn: "Huevos a la mexicana", descriptionEn: "2 eggs, tomato, onion and chili", category: "especial", priceCents: 9200, kitchen: "cocina-a", isAvailable: true },
   // Otras opciones $120–$140
-  { id: 54, name: "Pechuga a la plancha con chilaquiles", description: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
-  { id: 55, name: "Pechuga a la plancha con ensalada y papas", description: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
-  { id: 56, name: "Pechuga gratinada con chilaquiles", description: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
-  { id: 57, name: "Pechuga gratinada con ensalada y papas", description: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
-  { id: 58, name: "Pechuga empanizada con chilaquiles", description: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
-  { id: 59, name: "Pechuga empanizada con ensalada y papas", description: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
-  { id: 60, name: "Carne asada con chilaquiles", description: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
-  { id: 61, name: "Carne asada con ensalada y papas", description: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
-  { id: 62, name: "Milanesa de res con chilaquiles", description: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
-  { id: 63, name: "Milanesa de res con ensalada y papas", description: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
-  { id: 64, name: "Bistec a la ranchera", description: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
-  { id: 65, name: "Enchiladas de pollo", description: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
-  { id: 66, name: "Tacos de pollo", description: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
+  { id: 54, name: "Pechuga a la plancha con chilaquiles", description: "", nameEn: "Grilled chicken breast with chilaquiles", descriptionEn: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
+  { id: 55, name: "Pechuga a la plancha con ensalada y papas", description: "", nameEn: "Grilled chicken breast with salad and fries", descriptionEn: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
+  { id: 56, name: "Pechuga gratinada con chilaquiles", description: "", nameEn: "Gratin chicken breast with chilaquiles", descriptionEn: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
+  { id: 57, name: "Pechuga gratinada con ensalada y papas", description: "", nameEn: "Gratin chicken breast with salad and fries", descriptionEn: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
+  { id: 58, name: "Pechuga empanizada con chilaquiles", description: "", nameEn: "Breaded chicken breast with chilaquiles", descriptionEn: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
+  { id: 59, name: "Pechuga empanizada con ensalada y papas", description: "", nameEn: "Breaded chicken breast with salad and fries", descriptionEn: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
+  { id: 60, name: "Carne asada con chilaquiles", description: "", nameEn: "Grilled steak with chilaquiles", descriptionEn: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
+  { id: 61, name: "Carne asada con ensalada y papas", description: "", nameEn: "Grilled steak with salad and fries", descriptionEn: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
+  { id: 62, name: "Milanesa de res con chilaquiles", description: "", nameEn: "Beef milanesa with chilaquiles", descriptionEn: "", category: "otra", priceCents: 13000, kitchen: "cocina-a", isAvailable: true },
+  { id: 63, name: "Milanesa de res con ensalada y papas", description: "", nameEn: "Beef milanesa with salad and fries", descriptionEn: "", category: "otra", priceCents: 14000, kitchen: "cocina-a", isAvailable: true },
+  { id: 64, name: "Bistec a la ranchera", description: "", nameEn: "Ranch-style steak", descriptionEn: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
+  { id: 65, name: "Enchiladas de pollo", description: "", nameEn: "Chicken enchiladas", descriptionEn: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
+  { id: 66, name: "Tacos de pollo", description: "", nameEn: "Chicken tacos", descriptionEn: "", category: "otra", priceCents: 12000, kitchen: "cocina-a", isAvailable: true },
   // Extras
-  { id: 67, name: "Ingrediente extra", description: "", category: "extra", priceCents: 1800, kitchen: "cocina-a", isAvailable: true },
-  { id: 68, name: "Huevo extra", description: "", category: "extra", priceCents: 1400, kitchen: "cocina-a", isAvailable: true },
-  { id: 69, name: "Jugo de naranja chico", description: "", category: "extra", priceCents: 3000, kitchen: "cocina-a", isAvailable: true },
-  { id: 70, name: "Té", description: "", category: "extra", priceCents: 1600, kitchen: "cocina-a", isAvailable: true },
-  { id: 71, name: "Pan dulce", description: "", category: "extra", priceCents: 2700, kitchen: "cocina-a", isAvailable: true },
+  { id: 67, name: "Ingrediente extra", description: "", nameEn: "Extra ingredient", descriptionEn: "", category: "extra", priceCents: 1800, kitchen: "cocina-a", isAvailable: true },
+  { id: 68, name: "Huevo extra", description: "", nameEn: "Extra egg", descriptionEn: "", category: "extra", priceCents: 1400, kitchen: "cocina-a", isAvailable: true },
+  { id: 69, name: "Jugo de naranja chico", description: "", nameEn: "Small orange juice", descriptionEn: "", category: "extra", priceCents: 3000, kitchen: "cocina-a", isAvailable: true },
+  { id: 70, name: "Té", description: "", nameEn: "Tea", descriptionEn: "", category: "extra", priceCents: 1600, kitchen: "cocina-a", isAvailable: true },
+  { id: 71, name: "Pan dulce", description: "", nameEn: "Sweet bread", descriptionEn: "", category: "extra", priceCents: 2700, kitchen: "cocina-a", isAvailable: true },
 ];
 
 export type Tiempo = "primero" | "segundo" | "tercero";
