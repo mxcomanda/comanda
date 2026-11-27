@@ -312,3 +312,61 @@ button { cursor: pointer; }
 .cocuyos .lang-toggle { display: flex; border: 3px solid var(--cocuyos-gold); border-radius: 999px; overflow: hidden; }
 .cocuyos .lang-toggle button { border: 0; border-radius: 0; background: transparent; color: #ffe9a8; font-weight: 900; padding: 8px 16px; }
 .cocuyos .lang-toggle button.active { background: var(--cocuyos-gold); color: var(--dzib-ink); }
+
+/* ---------- Vista del comensal: textos justificados y botones alineados ---------- */
+/* Decisión del dueño 27 nov 2026: los textos del menú se veían con el
+   borde derecho irregular y el texto dentro de los botones se cortaba.
+   Solo /dzib (comensal): `.dzib:not(.cocuyos)` deja fuera a Cocuyos y
+   las vistas de personal no usan `.dzib-layout`, así que no se tocan.
+   Medidas verificadas con la fuente real (Archivo 900/700): el texto
+   más largo de un botón grande ("START WITH THE FIRST COURSE") mide
+   ~253px a 14px y el ancho disponible en el panel lateral es ~265px;
+   el selector más largo ("Fruta (papaya con plátano) ✓ Elegido") mide
+   ~258px a 13px y el ancho disponible apilado es ~264px. */
+/* 1) Textos justificados: descripciones de platillos, subtítulos,
+   textos informativos y líneas de ayuda. Los títulos de sección son
+   de una sola línea (justificar una línea sola no cambia nada) y el
+   encabezado no se toca. */
+.dzib:not(.cocuyos) .dzib-layout p,
+.dzib:not(.cocuyos) .dzib-layout .muted,
+.dzib:not(.cocuyos) .dzib-layout .dzib-today,
+.dzib:not(.cocuyos) .dzib-layout .alert,
+.dzib:not(.cocuyos) .dzib-layout .notes-line { text-align: justify; text-justify: inter-word; }
+/* 2) Fila de platillo: columna de acción de ancho FIJO (precio arriba,
+   botón abajo a todo lo ancho) para que TODOS los botones queden en
+   la misma línea, con el mismo ancho y la misma altura, sin importar
+   lo largo del nombre o la descripción del platillo. */
+.dzib:not(.cocuyos) .dzib-layout .item { align-items: center; }
+.dzib:not(.cocuyos) .dzib-layout .item > div,
+.dzib:not(.cocuyos) .dzib-layout .item > span { min-width: 0; }
+.dzib:not(.cocuyos) .dzib-layout .item-action { flex: none; width: 140px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.dzib:not(.cocuyos) .dzib-layout .item-price { font-weight: 800; text-align: right; }
+.dzib:not(.cocuyos) .dzib-layout .item-note { font-size: 11px; color: #555; text-align: right; line-height: 1.2; }
+/* 3) Texto CENTRADO dentro del botón (horizontal y vertical) y sin
+   cortarse: sin puntos suspensivos, sin desbordar y sin romperse en
+   dos líneas (white-space: nowrap + tamaños medidos, ver arriba). */
+.dzib:not(.cocuyos) .dzib-layout .item-action button { min-height: 42px; padding: 8px 6px; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; text-align: center; white-space: nowrap; }
+.dzib:not(.cocuyos) .dzib-layout .item-action > button { width: 100%; }
+.dzib:not(.cocuyos) .dzib-layout .item-btns { display: flex; gap: 6px; }
+.dzib:not(.cocuyos) .dzib-layout .item-btns button { flex: 1 1 0; min-width: 0; font-size: 14px; }
+.dzib:not(.cocuyos) .dzib-layout .item-btns button:last-child { flex: none; width: 30px; padding: 8px 0; }
+/* Botones grandes (pedir tiempo, enviar a cocina, confirmar pago,
+   agregar desayuno): flex centrado + nowrap + tamaño que cabe en el
+   panel lateral (14px) y en la columna del menú (15px). */
+.dzib:not(.cocuyos) .dzib-layout .big-btn { display: flex; align-items: center; justify-content: center; text-align: center; white-space: nowrap; font-size: 15px; letter-spacing: .02em; padding: 12px 10px; }
+.dzib:not(.cocuyos) .dzib-pedido-aside .big-btn { font-size: 14px; }
+/* Selector de bebida/lado y método de pago: botones del mismo ancho
+   en su fila, texto centrado y sin cortarse. En celular (y siempre en
+   el panel de pago, que es angosto) van apilados a todo lo ancho. */
+.dzib:not(.cocuyos) .dzib-layout .pay-row button { flex: 1 1 0; min-width: 0; padding: 10px 6px; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; text-align: center; white-space: nowrap; }
+.dzib:not(.cocuyos) .dzib-layout .pay-row-pago { flex-direction: column; }
+.dzib:not(.cocuyos) .dzib-layout .pay-row-pago button { flex: none; width: 100%; }
+@media (max-width: 899px) {
+  .dzib:not(.cocuyos) .dzib-layout .pay-row { flex-direction: column; }
+  .dzib:not(.cocuyos) .dzib-layout .pay-row button { flex: none; width: 100%; }
+}
+/* Botón flotante "Tu pedido" / "Confirma tu pedido" y resto de
+   botones del comensal: texto centrado y sin cortarse. */
+.dzib:not(.cocuyos) .pedido-fab { white-space: nowrap; text-align: center; max-width: calc(100vw - 130px); }
+.dzib:not(.cocuyos) .dzib-layout .cash-quick button,
+.dzib:not(.cocuyos) .dzib-layout .corrida-tabs button { white-space: nowrap; text-align: center; }

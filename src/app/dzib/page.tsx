@@ -811,7 +811,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
     const isBreakfast = i.category === "desayuno" || i.category === "especial" || i.category === "otra";
     return (
     <div key={i.id}>
-      <div className={count > 0 ? "item agregado" : "item"}><div><b>{displayName(i.name)}</b>{count > 0 && <span className="qty-badge">×{count}</span>}{displayDesc(i) && <div className="muted">{displayDesc(i)}</div>}</div><span>{mxn(i.priceCents)} {table && (isBreakfast ? (
+      <div className={count > 0 ? "item agregado" : "item"}><div><b>{displayName(i.name)}</b>{count > 0 && <span className="qty-badge">×{count}</span>}{displayDesc(i) && <div className="muted">{displayDesc(i)}</div>}</div><span className="item-action"><span className="item-price">{mxn(i.priceCents)}</span>{table && (isBreakfast ? (
         <button type="button" className={count > 0 ? "picked" : ""} onClick={() => setBreakfastPick(pick?.id === i.id ? null : { id: i.id, drink: "Café de olla", side: "Jugo de naranja" })}>{count > 0 ? tr("addAnother") : tr("choose")}</button>
       ) : (
         <button type="button" className={count > 0 ? "picked" : ""} onClick={() => addExtra(i.name, i.priceCents, undefined, "desayuno")}>{count > 0 ? tr("addAnother") : tr("add")}</button>
@@ -844,7 +844,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const extraIngredientRow = (i: any, group: "desayuno" | "separado" = "desayuno") => {
     const count = addedCount(i.name);
     return (
-    <div className={count > 0 ? "item agregado" : "item"} key={i.id}><div><b>{displayName(i.name)}</b>{count > 0 && <span className="qty-badge">×{count}</span>}<div className="muted">{tr("extraIngredientHint")}</div><input placeholder={tr("extraIngredientPh")} value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span>{mxn(i.priceCents)} {table && <button type="button" className={count > 0 ? "picked" : ""} onClick={() => addIngredientExtra(i, group)}>{count > 0 ? tr("addAnother") : tr("add")}</button>}</span></div>
+    <div className={count > 0 ? "item agregado" : "item"} key={i.id}><div><b>{displayName(i.name)}</b>{count > 0 && <span className="qty-badge">×{count}</span>}<div className="muted">{tr("extraIngredientHint")}</div><input placeholder={tr("extraIngredientPh")} value={extraIngredientText} onChange={(e) => setExtraIngredientText(e.target.value)} style={{ marginTop: 6 }} /></div><span className="item-action"><span className="item-price">{mxn(i.priceCents)}</span>{table && <button type="button" className={count > 0 ? "picked" : ""} onClick={() => addIngredientExtra(i, group)}>{count > 0 ? tr("addAnother") : tr("add")}</button>}</span></div>
     );
   };
   const editingSel = selFor(editingId);
@@ -853,7 +853,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
   const pagarPanel = showPay ? (
     <div className="card" style={{ marginTop: 14 }}>
       <b>{tr("payTitle", { total: mxn(accountTotal) })}</b>
-      <div className="pay-row">
+      <div className="pay-row pay-row-pago">
         <button type="button" className={payMethod === "terminal" ? "active" : ""} onClick={() => setPayMethod("terminal")}>{tr("cardTerminal")}</button>
         <button type="button" className={payMethod === "efectivo" ? "active" : ""} onClick={() => setPayMethod("efectivo")}>{tr("cash")}</button>
       </div>
@@ -991,10 +991,10 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
                 const sentQty = accItems.filter((i) => i.kind === "agua" && i.name === w.name && corridaOf(i) === editingId).reduce((s, i) => s + (i.qty ?? 1), 0);
                 const qty = draftQty + sentQty;
                 return (
-                  <div className="item" key={w.name}><div><b>{waterSize(w.label)}{qty > 0 ? ` ×${qty}` : ""}</b><div className="muted">{tr("waterWithFirst", { id: editingId })}</div></div><span>{mxn(w.priceCents)} · Precio por confirmar{" "}
+                  <div className="item" key={w.name}><div><b>{waterSize(w.label)}{qty > 0 ? ` ×${qty}` : ""}</b><div className="muted">{tr("waterWithFirst", { id: editingId })}</div></div><span className="item-action"><span className="item-price">{mxn(w.priceCents)}</span><span className="item-note">Precio por confirmar</span><span className="item-btns">
                     <button type="button" className={qty > 0 ? "picked" : ""} onClick={() => table && addWaterToComida(w)}>＋ {tr("add")}{qty > 0 ? ` ×${qty}` : ""}</button>
                     {draftQty > 0 && <button type="button" onClick={() => removeWaterFromComida(w.name)} title="Quitar una">−</button>}
-                  </span></div>
+                  </span></span></div>
                 );
               })}
             </div>
@@ -1014,21 +1014,21 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
           </SubAcc>
           <SubAcc title={tr("separateFood")} open={openBreakfast === "sep-comida"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-comida" ? null : "sep-comida")}>
             {MENU.items.map((i) => (
-              <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">{tiempoLabel(i.tiempo as Tiempo)}</div></div><span>{i.soloPriceCents === 0 ? tr("inSetMenu") : mxn(i.soloPriceCents)} {i.soloPriceCents > 0 ? addBtn(i.name, i.soloPriceCents) : null}</span></div>
+              <div className="item" key={i.id}><div><b>{i.name}</b><div className="muted">{tiempoLabel(i.tiempo as Tiempo)}</div></div><span className="item-action"><span className="item-price">{i.soloPriceCents === 0 ? tr("inSetMenu") : mxn(i.soloPriceCents)}</span>{i.soloPriceCents > 0 ? addBtn(i.name, i.soloPriceCents) : null}</span></div>
             ))}
           </SubAcc>
           <SubAcc title={tr("separateWater")} open={openBreakfast === "sep-agua"} onToggle={() => setOpenBreakfast(openBreakfast === "sep-agua" ? null : "sep-agua")}>
             {WATER.map((w) => {
               const qty = extras.filter((e) => e.name === w.name && e.group === "separado").reduce((s, e) => s + (e.qty ?? 1), 0);
               return (
-                <div className="item" key={w.name}><div><b>{waterSize(w.label)}{qty > 0 ? ` ×${qty}` : ""}</b><div className="muted">{tr("waterAndPrice")}</div></div><span>{mxn(w.priceCents)}{" "}
+                <div className="item" key={w.name}><div><b>{waterSize(w.label)}{qty > 0 ? ` ×${qty}` : ""}</b><div className="muted">{tr("waterAndPrice")}</div></div><span className="item-action"><span className="item-price">{mxn(w.priceCents)}</span><span className="item-btns">
                   <button type="button" className={qty > 0 ? "picked" : ""} onClick={() => table && addWaterSeparate(w)}>＋ {tr("add")}{qty > 0 ? ` ×${qty}` : ""}</button>
                   {qty > 0 && <button type="button" onClick={() => removeWaterSeparate(w.name)} title="Quitar una">−</button>}
-                </span></div>
+                </span></span></div>
               );
             })}
             {extrasList.map((i) => (i.name === "Ingrediente extra" ? extraIngredientRow(i, "separado") : (
-              <div className="item" key={i.id}><div><b>{i.name.startsWith("Agua del día") ? waterDisplay(i.name) : displayName(i.name)}</b></div><span>{mxn(i.priceCents)} {addBtn(i.name, i.priceCents)}</span></div>
+              <div className="item" key={i.id}><div><b>{i.name.startsWith("Agua del día") ? waterDisplay(i.name) : displayName(i.name)}</b></div><span className="item-action"><span className="item-price">{mxn(i.priceCents)}</span>{addBtn(i.name, i.priceCents)}</span></div>
             )))}
           </SubAcc>
         </Accordion>
@@ -1147,7 +1147,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
               <p style={{ marginTop: 10 }}><b>{tr("breakfasts")}</b></p>
               {pendingBreakfast.map((e) => (
                 <div key={e.key}>
-                  <div className="item"><span>{displayName(e.name)}{e.detail ? <span className="detail-line"> · {translateDetail(e.detail)}</span> : ""}</span><span>{mxn(e.priceCents)} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>{tr("remove")}</button></span></div>
+                  <div className="item"><span>{displayName(e.name)}{e.detail ? <span className="detail-line"> · {translateDetail(e.detail)}</span> : ""}</span><span className="item-action"><span className="item-price">{mxn(e.priceCents)}</span><button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>{tr("remove")}</button></span></div>
                   <input placeholder={tr("notesPhShort")} value={e.notes ?? ""} onChange={(ev) => setExtras(extras.map((x) => (x.key === e.key ? { ...x, notes: ev.target.value } : x)))} style={{ margin: "4px 0 10px" }} />
                 </div>
               ))}
@@ -1158,7 +1158,7 @@ export default function DzibPage({ searchParams }: { searchParams: { mesa?: stri
               <p style={{ marginTop: 10 }}><b>{tr("separatePending")}</b></p>
               {pendingSeparate.map((e) => (
                 <div key={e.key}>
-                  <div className="item"><span>{displayName(e.name)}{(e.qty ?? 1) > 1 ? ` ×${e.qty}` : ""}{e.detail ? <span className="detail-line"> · {translateDetail(e.detail)}</span> : ""}</span><span>{mxn(e.priceCents * (e.qty ?? 1))} <button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>{tr("remove")}</button></span></div>
+                  <div className="item"><span>{displayName(e.name)}{(e.qty ?? 1) > 1 ? ` ×${e.qty}` : ""}{e.detail ? <span className="detail-line"> · {translateDetail(e.detail)}</span> : ""}</span><span className="item-action"><span className="item-price">{mxn(e.priceCents * (e.qty ?? 1))}</span><button type="button" onClick={() => setExtras(extras.filter((x) => x.key !== e.key))}>{tr("remove")}</button></span></div>
                   <input placeholder={tr("notesPhShort")} value={e.notes ?? ""} onChange={(ev) => setExtras(extras.map((x) => (x.key === e.key ? { ...x, notes: ev.target.value } : x)))} style={{ margin: "4px 0 10px" }} />
                 </div>
               ))}
